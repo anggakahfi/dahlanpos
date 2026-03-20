@@ -1,0 +1,32 @@
+# Dependencies
+frontend/node_modules/
+frontend/.next/
+frontend/.pnp
+frontend/.pnp.js
+
+# Testing
+frontend/coverage/
+
+# Misc
+.DS_Store
+*.pem
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Debug
+frontend/npm-debug.log*
+frontend/yarn-debug.log*
+frontend/yarn-error.log*
+
+# Backend
+backend/bin/
+backend/tmp/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
