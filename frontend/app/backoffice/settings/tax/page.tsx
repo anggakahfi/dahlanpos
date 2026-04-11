@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { PageHeader } from "@/components/backoffice/page-header"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -12,12 +12,53 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { FieldGroup, Field, FieldLabel } from "@/components/ui/field"
 import { Info } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { useSettings, useUpdateSettings } from "@/features/backoffice/settings/hooks/useSettings"
+import { toast } from "sonner"
 
 export default function TaxSettingsPage() {
+  const { data: settings, isLoading } = useSettings()
+  const updateMutation = useUpdateSettings()
+
   const [taxEnabled, setTaxEnabled] = useState(true)
   const [taxRate, setTaxRate] = useState("11")
   const [taxName, setTaxName] = useState("PPN 11%")
   const [taxType, setTaxType] = useState<"inclusive" | "exclusive">("exclusive")
+
+  useEffect(() => {
+    if (settings?.tax) {
+      setTaxEnabled(settings.tax.enabled)
+      setTaxRate(settings.tax.rate.toString())
+      setTaxName(settings.tax.name || "")
+      setTaxType((settings.tax.type as "inclusive" | "exclusive") || "exclusive")
+    }
+  }, [settings])
+
+  const handleSave = async () => {
+    if (!settings) return
+    try {
+      await updateMutation.mutateAsync({
+        ...settings,
+        tax: {
+          enabled: taxEnabled,
+          rate: parseFloat(taxRate) || 0,
+          name: taxName,
+          type: taxType,
+        },
+      })
+      toast.success("Tax settings saved successfully!")
+    } catch (err: any) {
+      toast.error(err.message || "Failed to save tax settings")
+    }
+  }
+
+  if (isLoading) {
+    return (
+      <>
+        <PageHeader title="Tax Configuration" />
+        <div className="p-6">Loading settings...</div>
+      </>
+    )
+  }
 
   const price = 100000
   const tax = (price * parseInt(taxRate)) / 100
@@ -143,7 +184,13 @@ export default function TaxSettingsPage() {
                 )}
               </FieldGroup>
 
-              <Button className="mt-6 w-full">Save Changes</Button>
+              <Button
+                className="mt-6 w-full"
+                onClick={handleSave}
+                disabled={updateMutation.isPending}
+              >
+                {updateMutation.isPending ? "Saving..." : "Save Changes"}
+              </Button>
             </CardContent>
           </Card>
         </div>

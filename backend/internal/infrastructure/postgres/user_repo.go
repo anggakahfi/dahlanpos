@@ -20,9 +20,11 @@ func NewUserRepo(pool *pgxpool.Pool) *userRepo {
 func (r *userRepo) FindByEmail(ctx context.Context, email string) (*domain.User, error) {
 	var u domain.User
 	err := r.pool.QueryRow(ctx,
-		`SELECT id, outlet_id, name, email, role, status, created_at, updated_at
-		 FROM users WHERE email = $1`, email,
-	).Scan(&u.ID, &u.OutletID, &u.Name, &u.Email, &u.Role, &u.Status, &u.CreatedAt, &u.UpdatedAt)
+		`SELECT u.id, u.outlet_id, o.name as outlet_name, u.name, u.email, u.role, u.status, u.created_at, u.updated_at
+		 FROM users u
+		 LEFT JOIN outlets o ON u.outlet_id = o.id
+		 WHERE u.email = $1`, email,
+	).Scan(&u.ID, &u.OutletID, &u.OutletName, &u.Name, &u.Email, &u.Role, &u.Status, &u.CreatedAt, &u.UpdatedAt)
 	if err != nil {
 		return nil, err
 	}
@@ -32,9 +34,11 @@ func (r *userRepo) FindByEmail(ctx context.Context, email string) (*domain.User,
 func (r *userRepo) FindByID(ctx context.Context, id uuid.UUID) (*domain.User, error) {
 	var u domain.User
 	err := r.pool.QueryRow(ctx,
-		`SELECT id, outlet_id, name, email, role, status, created_at, updated_at
-		 FROM users WHERE id = $1`, id,
-	).Scan(&u.ID, &u.OutletID, &u.Name, &u.Email, &u.Role, &u.Status, &u.CreatedAt, &u.UpdatedAt)
+		`SELECT u.id, u.outlet_id, o.name as outlet_name, u.name, u.email, u.role, u.status, u.created_at, u.updated_at
+		 FROM users u
+		 LEFT JOIN outlets o ON u.outlet_id = o.id
+		 WHERE u.id = $1`, id,
+	).Scan(&u.ID, &u.OutletID, &u.OutletName, &u.Name, &u.Email, &u.Role, &u.Status, &u.CreatedAt, &u.UpdatedAt)
 	if err != nil {
 		return nil, err
 	}
@@ -43,8 +47,10 @@ func (r *userRepo) FindByID(ctx context.Context, id uuid.UUID) (*domain.User, er
 
 func (r *userRepo) FindAll(ctx context.Context) ([]domain.User, error) {
 	rows, err := r.pool.Query(ctx,
-		`SELECT id, outlet_id, name, email, role, status, created_at, updated_at
-		 FROM users ORDER BY created_at DESC`)
+		`SELECT u.id, u.outlet_id, o.name as outlet_name, u.name, u.email, u.role, u.status, u.created_at, u.updated_at
+		 FROM users u
+		 LEFT JOIN outlets o ON u.outlet_id = o.id
+		 ORDER BY u.created_at DESC`)
 	if err != nil {
 		return nil, err
 	}
@@ -53,7 +59,7 @@ func (r *userRepo) FindAll(ctx context.Context) ([]domain.User, error) {
 	var users []domain.User
 	for rows.Next() {
 		var u domain.User
-		if err := rows.Scan(&u.ID, &u.OutletID, &u.Name, &u.Email, &u.Role, &u.Status, &u.CreatedAt, &u.UpdatedAt); err != nil {
+		if err := rows.Scan(&u.ID, &u.OutletID, &u.OutletName, &u.Name, &u.Email, &u.Role, &u.Status, &u.CreatedAt, &u.UpdatedAt); err != nil {
 			return nil, err
 		}
 		users = append(users, u)

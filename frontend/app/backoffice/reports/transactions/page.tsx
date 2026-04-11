@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { PageHeader } from "@/components/backoffice/page-header"
 import { DateFilter } from "@/components/backoffice/date-filter"
 import { Card, CardContent } from "@/components/ui/card"
@@ -31,44 +31,88 @@ import {
 import { Separator } from "@/components/ui/separator"
 import { Search, Receipt, DollarSign, Eye } from "lucide-react"
 import { getReportTransactions, getOutlets } from "@/lib/api"
-import type { Transaction, Outlet } from "@/lib/types"
+import type { Transaction, Outlet, DateRange } from "@/lib/types"
 
 export default function TransactionsPage() {
   const [selectedOutlet, setSelectedOutlet] = useState("all")
   const [paymentFilter, setPaymentFilter] = useState("all")
   const [searchQuery, setSearchQuery] = useState("")
+  const [debouncedSearch, setDebouncedSearch] = useState("")
+  const [dateRange, setDateRange] = useState<DateRange | null>(null)
+  const [errorMsg, setErrorMsg] = useState<string | null>(null)
+  
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null)
   const [transactionList, setTransactionList] = useState<Transaction[]>([])
   const [outletList, setOutletList] = useState<Outlet[]>([])
+  
+  const [page, setPage] = useState(1)
+  const [totalRecords, setTotalRecords] = useState(0)
+  const [isLoading, setIsLoading] = useState(false)
 
+  // Debouncing for search
   useEffect(() => {
-    getReportTransactions().then((res) => setTransactionList(res.data || [])).catch(() => {})
+    const handler = setTimeout(() => {
+      setDebouncedSearch(searchQuery)
+      setPage(1)
+    }, 500)
+    return () => clearTimeout(handler)
+  }, [searchQuery])
+
+  // Reset page inline with filter changes — no separate useEffect needed
+  const handleOutletChange = (val: string) => { setSelectedOutlet(val); setPage(1) }
+  const handlePaymentChange = (val: string) => { setPaymentFilter(val); setPage(1) }
+  const handleDateChange = (val: DateRange | null) => { setDateRange(val); setPage(1) }
+
+  // Single fetch for outlets
+  useEffect(() => {
     getOutlets().then((data) => setOutletList(data || [])).catch(() => {})
   }, [])
 
-  const filteredTransactions = transactionList.filter((t) => {
-    if (selectedOutlet !== "all" && t.outletId !== selectedOutlet) return false
-    if (paymentFilter !== "all" && t.paymentMethod !== paymentFilter) return false
-    if (searchQuery && !t.orderId.toLowerCase().includes(searchQuery.toLowerCase()))
-      return false
-    return true
-  })
+  const fetchTransactions = useCallback(async () => {
+    // Don't fetch until DateFilter has initialized the date range
+    if (!dateRange) return
+    
+    setIsLoading(true)
+    setErrorMsg(null)
+    try {
+      const params: Record<string, string> = { page: String(page), per_page: "20" }
+      if (selectedOutlet !== "all") params.outlet_id = selectedOutlet
+      if (paymentFilter !== "all") params.payment_method = paymentFilter
+      if (debouncedSearch) params.search = debouncedSearch
+      
+      if (dateRange.start) params.start_date = dateRange.start.toISOString()
+      if (dateRange.end) params.end_date = dateRange.end.toISOString()
+      
+      const res = await getReportTransactions(params)
+      setTransactionList(res.data || [])
+      setTotalRecords((res.meta as any)?.total ?? 0)
+    } catch (err: any) {
+      console.error("Failed to fetch transactions", err)
+      setErrorMsg(err.message || "Gagal memuat data dari server. Token kadaluarsa atau koneksi terputus.")
+    } finally {
+      setIsLoading(false)
+    }
+  }, [page, selectedOutlet, paymentFilter, debouncedSearch, dateRange])
 
-  const totalTransactions = filteredTransactions.length
-  const totalRevenue = filteredTransactions
+  useEffect(() => {
+    fetchTransactions()
+  }, [fetchTransactions])
+
+  const totalPages = Math.ceil(totalRecords / 20)
+  const totalRevenue = transactionList
     .filter((t) => t.status === "paid")
     .reduce((sum, t) => sum + t.total, 0)
 
   return (
     <>
       <PageHeader title="Transactions">
-        <DateFilter />
+        <DateFilter onDateChange={handleDateChange} />
       </PageHeader>
 
       <div className="flex-1 overflow-y-auto p-6">
         {/* Filters */}
         <div className="mb-6 flex flex-wrap items-center gap-4">
-          <Select value={selectedOutlet} onValueChange={setSelectedOutlet}>
+          <Select value={selectedOutlet} onValueChange={handleOutletChange}>
             <SelectTrigger className="w-48">
               <SelectValue placeholder="Select Outlet" />
             </SelectTrigger>
@@ -82,7 +126,7 @@ export default function TransactionsPage() {
             </SelectContent>
           </Select>
 
-          <Select value={paymentFilter} onValueChange={setPaymentFilter}>
+          <Select value={paymentFilter} onValueChange={handlePaymentChange}>
             <SelectTrigger className="w-40">
               <SelectValue placeholder="Payment" />
             </SelectTrigger>
@@ -113,7 +157,7 @@ export default function TransactionsPage() {
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Total Transactions</p>
-                <p className="text-2xl font-bold">{totalTransactions}</p>
+                <p className="text-2xl font-bold">{totalRecords}</p>
               </div>
             </CardContent>
           </Card>
@@ -147,56 +191,98 @@ export default function TransactionsPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredTransactions.map((transaction) => (
-                  <TableRow key={transaction.id}>
-                    <TableCell className="font-mono text-sm">
-                      {transaction.orderId}
-                    </TableCell>
-                    <TableCell>{transaction.outletName}</TableCell>
-                    <TableCell>
-                      {transaction.date} {transaction.time.slice(0, 5)}
-                    </TableCell>
-                    <TableCell className="max-w-32 truncate">
-                      {transaction.items.map((i) => i.name).join(", ")}
-                    </TableCell>
-                    <TableCell className="uppercase">{transaction.paymentMethod}</TableCell>
-                    <TableCell className="text-right font-medium">
-                      Rp {transaction.total.toLocaleString()}
-                    </TableCell>
-                    <TableCell>
-                      <Badge
-                        variant={transaction.status === "paid" ? "default" : "destructive"}
-                        className={
-                          transaction.status === "paid"
-                            ? "bg-[#10B981] hover:bg-[#10B981]/80"
-                            : ""
-                        }
-                      >
-                        {transaction.status === "paid" ? "Paid" : "Void"}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setSelectedTransaction(transaction)}
-                      >
-                        <Eye className="mr-1 h-4 w-4" />
-                        Detail
-                      </Button>
+                {isLoading ? (
+                  <TableRow>
+                    <TableCell colSpan={8} className="h-24 text-center">
+                      Loading transactions...
                     </TableCell>
                   </TableRow>
-                ))}
+                ) : errorMsg ? (
+                  <TableRow>
+                    <TableCell colSpan={8} className="h-24 text-center text-red-500 font-medium">
+                      {errorMsg}
+                    </TableCell>
+                  </TableRow>
+                ) : transactionList.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={8} className="h-24 text-center">
+                      No transactions found.
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  transactionList.map((transaction) => (
+                    <TableRow key={transaction.id}>
+                      <TableCell className="font-mono text-sm">
+                        {transaction.orderId}
+                      </TableCell>
+                      <TableCell>{transaction.outletName}</TableCell>
+                      <TableCell>
+                        {transaction.date} {transaction.time.slice(0, 5)}
+                      </TableCell>
+                      <TableCell className="max-w-32 truncate">
+                        {transaction.items.map((i) => i.name).join(", ")}
+                      </TableCell>
+                      <TableCell className="uppercase">{transaction.paymentMethod}</TableCell>
+                      <TableCell className="text-right font-medium">
+                        Rp {transaction.total.toLocaleString()}
+                      </TableCell>
+                      <TableCell>
+                        <Badge
+                          variant={transaction.status === "paid" ? "default" : "destructive"}
+                          className={
+                            transaction.status === "paid"
+                              ? "bg-[#10B981] hover:bg-[#10B981]/80"
+                              : ""
+                          }
+                        >
+                          {transaction.status === "paid" ? "Paid" : "Void"}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setSelectedTransaction(transaction)}
+                        >
+                          <Eye className="mr-1 h-4 w-4" />
+                          Detail
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
               </TableBody>
             </Table>
           </CardContent>
         </Card>
 
-        {/* Pagination placeholder */}
-        <div className="mt-4 flex items-center justify-between">
+        {/* Pagination Controls */}
+        <div className="mt-4 flex flex-col items-center justify-between gap-4 sm:flex-row">
           <p className="text-sm text-muted-foreground">
-            Showing 1-{filteredTransactions.length} of {filteredTransactions.length}
+            Showing {totalRecords === 0 ? 0 : (page - 1) * 20 + 1}-
+            {Math.min(page * 20, totalRecords)} of {totalRecords}
           </p>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={page === 1 || isLoading}
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+            >
+              Previous
+            </Button>
+            <div className="flex items-center justify-center text-sm font-medium">
+              Page {page} of {Math.max(1, totalPages)}
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={page >= totalPages || isLoading}
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+            >
+              Next
+            </Button>
+          </div>
         </div>
       </div>
 

@@ -24,12 +24,13 @@ const (
 
 // User represents an employee (owner or cashier) who logs in via OAuth.
 type User struct {
-	ID        uuid.UUID  `json:"id"`
-	OutletID  *uuid.UUID `json:"outlet_id,omitempty"` // Nullable for owner
-	Name      string     `json:"name"`
-	Email     string     `json:"email"`
-	Role      UserRole   `json:"role"`
-	Status    UserStatus `json:"status"`
-	CreatedAt time.Time  `json:"created_at"`
-	UpdatedAt time.Time  `json:"updated_at"`
+	ID         uuid.UUID  `json:"id"`
+	OutletID   *uuid.UUID `json:"outlet_id,omitempty"` // Nullable for owner
+	OutletName *string    `json:"outlet_name,omitempty"`
+	Name       string     `json:"name"`
+	Email      string     `json:"email"`
+	Role       UserRole   `json:"role"`
+	Status     UserStatus `json:"status"`
+	CreatedAt  time.Time  `json:"created_at"`
+	UpdatedAt  time.Time  `json:"updated_at"`
 }

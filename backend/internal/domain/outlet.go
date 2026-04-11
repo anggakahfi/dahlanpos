@@ -24,6 +24,7 @@ type Outlet struct {
 	OpenTime  string       `json:"open_time,omitempty"`
 	CloseTime string       `json:"close_time,omitempty"`
 	Status    OutletStatus `json:"status"`
-	CreatedAt time.Time    `json:"created_at"`
-	UpdatedAt time.Time    `json:"updated_at"`
+	CreatedAt     time.Time    `json:"created_at"`
+	UpdatedAt     time.Time    `json:"updated_at"`
+	EmployeeCount int          `json:"employee_count"`
 }

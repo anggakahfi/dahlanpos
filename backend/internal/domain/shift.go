@@ -25,10 +25,24 @@ type Shift struct {
 	EndingCash       *float64    `json:"ending_cash,omitempty"`
 	ExpectedCash     *float64    `json:"expected_cash,omitempty"`
 	Discrepancy      *float64    `json:"discrepancy,omitempty"`
-	DiscrepancyNote  string      `json:"discrepancy_note,omitempty"`
+	DiscrepancyNote  *string     `json:"discrepancy_note,omitempty"`
 	Status           ShiftStatus `json:"status"`
 
 	// Populated by joins
 	CashierName string `json:"cashier_name,omitempty"`
 	OutletName  string `json:"outlet_name,omitempty"`
+}
+
+// ShiftSummary represents aggregated data for a specific shift.
+type ShiftSummary struct {
+	ShiftID           uuid.UUID `json:"shift_id"`
+	TotalSales        float64   `json:"total_sales"`
+	TotalTransactions int       `json:"total_transactions"`
+	CashSales         float64   `json:"cash_sales"`
+	CardSales         float64   `json:"card_sales"`
+	QRISSales         float64   `json:"qris_sales"`
+	StartingCash      float64   `json:"starting_cash"`
+	ExpectedCash      float64   `json:"expected_cash"`
+	Refunds           float64   `json:"refunds"` // Optional, currently not tracked in DB but we keep for struct parity
+	Voids             float64   `json:"voids"`
 }

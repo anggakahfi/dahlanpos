@@ -10,12 +10,13 @@ import (
 
 // TransactionUsecase handles transaction creation and voiding.
 type TransactionUsecase struct {
-	txnRepo repository.TransactionRepository
-	logRepo repository.ActivityLogRepository
+	txnRepo     repository.TransactionRepository
+	logRepo     repository.ActivityLogRepository
+	productRepo repository.ProductRepository
 }
 
-func NewTransactionUsecase(tr repository.TransactionRepository, lr repository.ActivityLogRepository) *TransactionUsecase {
-	return &TransactionUsecase{txnRepo: tr, logRepo: lr}
+func NewTransactionUsecase(tr repository.TransactionRepository, lr repository.ActivityLogRepository, pr repository.ProductRepository) *TransactionUsecase {
+	return &TransactionUsecase{txnRepo: tr, logRepo: lr, productRepo: pr}
 }
 
 // CreateTransaction processes a new sale with stock deduction.
@@ -41,18 +42,31 @@ func (uc *TransactionUsecase) CreateTransaction(ctx context.Context, req domain.
 	}
 
 	txn := &domain.Transaction{
-		ShiftID:       req.ShiftID,
-		OutletID:      req.OutletID,
-		CustomerName:  req.CustomerName,
-		Subtotal:      subtotal,
-		TotalAmount:   subtotal, // Tax/discount computed here if needed
-		PaymentMethod: req.PaymentMethod,
-		PaymentStatus: domain.PaymentPaid,
-		Items:         items,
+		ShiftID:        req.ShiftID,
+		OutletID:       req.OutletID,
+		CustomerName:   req.CustomerName,
+		Subtotal:       req.Subtotal,
+		TaxAmount:      req.TaxAmount,
+		DiscountAmount: req.DiscountAmount,
+		TotalAmount:    req.TotalAmount,
+		PaymentMethod:  req.PaymentMethod,
+		PaymentStatus:  domain.PaymentPaid,
+		Items:          items,
+	}
+
+	// Just in case the frontend sends 0 subtotal but calculates from items, let's fallback to calculated items
+	if txn.Subtotal == 0 && subtotal > 0 {
+		txn.Subtotal = subtotal
+		txn.TotalAmount = subtotal + txn.TaxAmount - txn.DiscountAmount
 	}
 
 	if err := uc.txnRepo.Create(ctx, txn); err != nil {
 		return nil, err
+	}
+
+	// 🔽 Deduct stock for each item
+	for _, item := range req.Items {
+		_ = uc.productRepo.UpdateStock(ctx, item.ProductID, -item.Quantity)
 	}
 
 	_ = uc.logRepo.Create(ctx, &domain.ActivityLog{

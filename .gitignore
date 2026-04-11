@@ -30,3 +30,24 @@ backend/tmp/
 .vscode/
 *.swp
 *.swo
+
+# Executables and Logs
+*.exe
+server_linux
+*_log.txt
+out.txt
+
+# Go Dependencies
+backend/vendor/
+
+# Local Debug Scripts
+backend/cmd/debug/
+test_*.go
+check_*.go
+fix_db.go
+list_users.go
+test_ms.go
+test_time.go
+
+# TS Cache
+frontend/tsconfig.tsbuildinfo

@@ -2,6 +2,8 @@
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
+import { useQuery } from "@tanstack/react-query"
+import { getCurrentShiftSummary } from "@/lib/api"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -21,8 +23,9 @@ import {
   Receipt,
   TrendingUp,
   Banknote,
-  CreditCard,
   AlertTriangle,
+  AlertCircle,
+  RefreshCw,
 } from "lucide-react"
 import { useShift } from "@/components/cashier/shift-context"
 
@@ -34,17 +37,25 @@ export default function ShiftPage() {
   const [shiftNote, setShiftNote] = useState("")
   const [isClosing, setIsClosing] = useState(false)
 
-  // Mock shift data
-  const shiftData = {
-    totalSales: 2450000,
-    totalTransactions: 45,
-    cashSales: 1200000,
-    cardSales: 750000,
-    qrisSales: 500000,
-    startingCash: currentShift?.startingCash || 500000,
-    expectedCash: 1700000, // startingCash + cashSales
-    refunds: 50000,
-    voids: 25000,
+  const { data: summaryData, isLoading, isError, refetch } = useQuery({
+    queryKey: ["shiftSummary"],
+    queryFn: getCurrentShiftSummary,
+    enabled: isShiftOpen,
+    staleTime: 0,
+    refetchOnMount: "always",
+    refetchInterval: 10000,
+    retry: 2,
+  })
+
+  // Dynamic shift data or fallback
+  const shiftData = summaryData || {
+    total_sales: 0,
+    total_transactions: 0,
+    cash_sales: 0,
+    qris_sales: 0,
+    starting_cash: currentShift?.startingCash || 0,
+    expected_cash: currentShift?.startingCash || 0,
+    voids: 0,
   }
 
   const formatPrice = (price: number) => {
@@ -66,21 +77,39 @@ export default function ShiftPage() {
   }
 
   const handleCloseShift = async () => {
+    if (!currentShift?.id) return
     const amount = parseFloat(endingCash.replace(/\D/g, "")) || 0
     setIsClosing(true)
     
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 1000))
-    
-    closeShift(amount)
-    setIsClosing(false)
-    setShowCloseDialog(false)
-    
-    // Redirect to shift summary
-    router.push("/cashier/shift/summary")
+    try {
+      // Pass the note to closeShift context (Bug 2 fix)
+      await closeShift(amount, shiftNote)
+
+      // Store FULL summary data for summary page (Bug 4 fix)
+      sessionStorage.setItem("lastClosedShift", JSON.stringify({
+        id: currentShift.id,
+        outlet_id: currentShift.outletId,
+        starting_cash: shiftData.starting_cash,
+        ending_cash: amount,
+        total_sales: shiftData.total_sales,
+        total_transactions: shiftData.total_transactions,
+        cash_sales: shiftData.cash_sales,
+        qris_sales: shiftData.qris_sales,
+        discrepancy_note: shiftNote || undefined,
+        started_at: currentShift.startTime,
+        closed_at: new Date().toISOString(),
+      }))
+      
+      setShowCloseDialog(false)
+      router.push("/cashier/shift/summary")
+    } catch (err: any) {
+      alert("Gagal menutup shift: " + (err?.message || "Coba lagi."))
+    } finally {
+      setIsClosing(false)
+    }
   }
 
-  const cashDifference = (parseFloat(endingCash.replace(/\D/g, "")) || 0) - shiftData.expectedCash
+  const cashDifference = (parseFloat(endingCash.replace(/\D/g, "")) || 0) - shiftData.expected_cash
 
   if (!isShiftOpen) {
     return (
@@ -122,6 +151,27 @@ export default function ShiftPage() {
           </Button>
         </div>
 
+        {/* Error Banner (Bug 1 fix) */}
+        {isError && (
+          <Card className="mb-6 border-yellow-300 bg-yellow-50">
+            <CardContent className="p-4 flex items-center gap-3">
+              <AlertCircle className="h-5 w-5 text-yellow-600 shrink-0" />
+              <div className="flex-1">
+                <p className="text-sm font-medium text-yellow-800">
+                  Gagal memuat ringkasan shift
+                </p>
+                <p className="text-xs text-yellow-600">
+                  Data penjualan mungkin belum terupdate
+                </p>
+              </div>
+              <Button variant="outline" size="sm" onClick={() => refetch()}>
+                <RefreshCw className="h-4 w-4 mr-1" />
+                Coba Lagi
+              </Button>
+            </CardContent>
+          </Card>
+        )}
+
         {/* Summary Cards */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
           <Card>
@@ -146,7 +196,7 @@ export default function ShiftPage() {
                 <div>
                   <p className="text-sm text-muted-foreground">Total Penjualan</p>
                   <p className="font-semibold text-green-600">
-                    {formatPrice(shiftData.totalSales)}
+                    {formatPrice(shiftData.total_sales)}
                   </p>
                 </div>
               </div>
@@ -160,7 +210,7 @@ export default function ShiftPage() {
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Transaksi</p>
-                  <p className="font-semibold">{shiftData.totalTransactions}</p>
+                  <p className="font-semibold">{shiftData.total_transactions}</p>
                 </div>
               </div>
             </CardContent>
@@ -173,7 +223,7 @@ export default function ShiftPage() {
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Kas Awal</p>
-                  <p className="font-semibold">{formatPrice(shiftData.startingCash)}</p>
+                  <p className="font-semibold">{formatPrice(shiftData.starting_cash)}</p>
                 </div>
               </div>
             </CardContent>
@@ -194,16 +244,7 @@ export default function ShiftPage() {
                   </div>
                   <span>Tunai</span>
                 </div>
-                <span className="font-medium">{formatPrice(shiftData.cashSales)}</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
-                    <CreditCard className="h-4 w-4 text-blue-600" />
-                  </div>
-                  <span>Kartu</span>
-                </div>
-                <span className="font-medium">{formatPrice(shiftData.cardSales)}</span>
+                <span className="font-medium">{formatPrice(shiftData.cash_sales)}</span>
               </div>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
@@ -212,12 +253,12 @@ export default function ShiftPage() {
                   </div>
                   <span>QRIS</span>
                 </div>
-                <span className="font-medium">{formatPrice(shiftData.qrisSales)}</span>
+                <span className="font-medium">{formatPrice(shiftData.qris_sales)}</span>
               </div>
               <Separator />
               <div className="flex items-center justify-between font-semibold">
                 <span>Total</span>
-                <span className="text-primary">{formatPrice(shiftData.totalSales)}</span>
+                <span className="text-primary">{formatPrice(shiftData.total_sales)}</span>
               </div>
             </CardContent>
           </Card>
@@ -229,20 +270,22 @@ export default function ShiftPage() {
             <CardContent className="space-y-4">
               <div className="flex items-center justify-between text-sm">
                 <span className="text-muted-foreground">Kas Awal</span>
-                <span>{formatPrice(shiftData.startingCash)}</span>
+                <span>{formatPrice(shiftData.starting_cash)}</span>
               </div>
               <div className="flex items-center justify-between text-sm">
                 <span className="text-muted-foreground">Penjualan Tunai</span>
-                <span className="text-green-600">+{formatPrice(shiftData.cashSales)}</span>
+                <span className="text-green-600">+{formatPrice(shiftData.cash_sales)}</span>
               </div>
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">Refund Tunai</span>
-                <span className="text-red-600">-{formatPrice(shiftData.refunds)}</span>
-              </div>
+              {(shiftData.voids ?? 0) > 0 && (
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground">Void</span>
+                  <span className="text-red-600">-{formatPrice(shiftData.voids)}</span>
+                </div>
+              )}
               <Separator />
               <div className="flex items-center justify-between font-semibold">
                 <span>Kas yang Diharapkan</span>
-                <span>{formatPrice(shiftData.expectedCash)}</span>
+                <span>{formatPrice(shiftData.expected_cash)}</span>
               </div>
             </CardContent>
           </Card>
@@ -264,7 +307,7 @@ export default function ShiftPage() {
               <CardContent className="p-4">
                 <div className="flex justify-between text-sm mb-2">
                   <span className="text-muted-foreground">Kas yang Diharapkan</span>
-                  <span className="font-medium">{formatPrice(shiftData.expectedCash)}</span>
+                  <span className="font-medium">{formatPrice(shiftData.expected_cash)}</span>
                 </div>
               </CardContent>
             </Card>

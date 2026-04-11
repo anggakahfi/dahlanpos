@@ -1,5 +1,3 @@
-"use client"
-
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
@@ -16,6 +14,7 @@ import {
 } from "@/components/ui/dialog"
 import { Minus, Plus, Trash2, X, Percent, User } from "lucide-react"
 import type { CartItem } from "@/lib/types"
+import { useShift } from "@/components/cashier/shift-context"
 
 interface CartPanelProps {
   items: CartItem[]
@@ -26,6 +25,7 @@ interface CartPanelProps {
 
 export function CartPanel({ items, onUpdateQuantity, onRemoveItem, onClearCart }: CartPanelProps) {
   const router = useRouter()
+  const { currentShift } = useShift()
   const [discount, setDiscount] = useState(0)
   const [discountType, setDiscountType] = useState<"percent" | "fixed">("percent")
   const [customerName, setCustomerName] = useState("")
@@ -56,6 +56,8 @@ export function CartPanel({ items, onUpdateQuantity, onRemoveItem, onClearCart }
       tax,
       total,
       customerName,
+      shiftId: currentShift?.id || "",
+      outletId: currentShift?.outletId || "",
     }
     sessionStorage.setItem("checkoutData", JSON.stringify(checkoutData))
     router.push("/cashier/payment")

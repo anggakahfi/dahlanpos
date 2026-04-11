@@ -1,22 +1,18 @@
-# Build stage
-FROM golang:1.22-alpine AS builder
+FROM debian:bookworm-slim
+
+# Install dependencies
+RUN apt-get update && apt-get install -y ca-certificates tzdata && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
-COPY go.mod go.sum ./
-RUN go mod download
+# Copy the pre-built Linux binary (built on host)
+COPY server_linux ./server
 
-COPY . .
-RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /server ./cmd/server/main.go
-
-# Runtime stage
-FROM alpine:3.19
-
-RUN apk --no-cache add ca-certificates tzdata
-
-WORKDIR /app
-COPY --from=builder /server .
+# Copy migrations and other assets
 COPY db/migrations ./db/migrations
+
+# Ensure the server is executable
+RUN chmod +x ./server
 
 EXPOSE 8080
 

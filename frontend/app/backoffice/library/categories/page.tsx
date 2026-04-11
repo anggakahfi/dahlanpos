@@ -19,10 +19,12 @@ import { Plus, Pencil, Trash2 } from "lucide-react"
 import { useCategories, useCreateCategory, useUpdateCategory, useDeleteCategory } from "@/features/backoffice/categories/hooks/useCategories"
 import { categorySchema, type CategoryFormData } from "@/features/backoffice/categories/schemas/categorySchema"
 import type { Category } from "@/lib/types"
+import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 
 export default function CategoriesPage() {
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [editingCategory, setEditingCategory] = useState<Category | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<Category | null>(null)
 
   // ─── TanStack Query ─────────────────────────────
   const { data: categoryList = [], isLoading, isError } = useCategories()
@@ -56,18 +58,19 @@ export default function CategoriesPage() {
       } else {
         await createMutation.mutateAsync(data.name)
       }
+      toast.success("Kategori berhasil disimpan")
       setIsModalOpen(false)
     } catch (err: any) {
-      alert(err.message || "Gagal menyimpan kategori")
+      toast.error(err.message || "Gagal menyimpan kategori")
     }
   }
 
   const handleDelete = async (id: string) => {
-    if (!confirm("Yakin ingin menghapus kategori ini?")) return
     try {
       await deleteMutation.mutateAsync(id)
+      toast.success("Kategori berhasil dihapus")
     } catch (err: any) {
-      alert(err.message || "Gagal menghapus kategori")
+      toast.error(err.message || "Gagal menghapus kategori")
     }
   }
 
@@ -127,7 +130,7 @@ export default function CategoriesPage() {
                       variant="ghost"
                       size="sm"
                       className="text-destructive hover:bg-destructive hover:text-destructive-foreground"
-                      onClick={() => handleDelete(category.id)}
+                      onClick={() => setDeleteTarget(category)}
                     >
                       <Trash2 className="h-4 w-4" />
                     </Button>
@@ -171,6 +174,15 @@ export default function CategoriesPage() {
           </form>
         </DialogContent>
       </Dialog>
+      <ConfirmDialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => !open && setDeleteTarget(null)}
+        title="Hapus Kategori"
+        description={`Apakah Anda yakin ingin menghapus kategori "${deleteTarget?.name}"? Semua item yang terkait mungkin terpengaruh. Tindakan ini tidak dapat dibatalkan.`}
+        confirmLabel="Hapus"
+        onConfirm={() => deleteTarget && handleDelete(deleteTarget.id)}
+        isLoading={deleteMutation.isPending}
+      />
     </>
   )
 }

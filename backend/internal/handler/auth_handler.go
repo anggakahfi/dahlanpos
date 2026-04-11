@@ -27,11 +27,10 @@ func (h *AuthHandler) LoginOAuth(c *gin.Context) {
 		return
 	}
 
-	// TODO: In production, verify Google ID Token and extract email.
-	// For development, we use the id_token AS the email directly.
-	email := req.IDToken
+	// For production, we pass the id_token directly to usecase for validation.
+	idToken := req.IDToken
 
-	resp, err := h.authUC.LoginWithOAuth(c.Request.Context(), email)
+	resp, err := h.authUC.LoginWithOAuth(c.Request.Context(), idToken)
 	if err != nil {
 		RespondError(c, http.StatusForbidden, "ACCESS_DENIED", err.Error())
 		return

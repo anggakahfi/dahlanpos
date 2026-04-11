@@ -18,19 +18,24 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog"
 import { FieldGroup, Field, FieldLabel } from "@/components/ui/field"
-import { Plus, Pencil, Users, MapPin, Phone } from "lucide-react"
-import { useOutlets, useCreateOutlet, useUpdateOutlet } from "@/features/backoffice/outlets/hooks/useOutlets"
+import { Plus, Pencil, Users, MapPin, Phone, Trash2, Clock } from "lucide-react"
+import { useOutlets, useCreateOutlet, useUpdateOutlet, useDeleteOutlet, useUpdateOutletStatus } from "@/features/backoffice/outlets/hooks/useOutlets"
 import { outletSchema, type OutletFormData } from "@/features/backoffice/outlets/schemas/outletSchema"
 import type { Outlet } from "@/lib/types"
+import { ConfirmDialog } from "@/components/ui/confirm-dialog"
+import { toast } from "sonner"
 
 export default function OutletsPage() {
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [editingOutlet, setEditingOutlet] = useState<Outlet | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<Outlet | null>(null)
 
   // ─── TanStack Query (Server State) ──────────────
   const { data: outletList = [], isLoading, isError } = useOutlets()
   const createMutation = useCreateOutlet()
   const updateMutation = useUpdateOutlet()
+  const deleteMutation = useDeleteOutlet()
+  const statusMutation = useUpdateOutletStatus()
 
   // ─── React Hook Form + Zod ──────────────────────
   const form = useForm<OutletFormData>({
@@ -82,13 +87,23 @@ export default function OutletsPage() {
       } else {
         await createMutation.mutateAsync(data)
       }
+      toast.success("Outlet berhasil disimpan")
       setIsModalOpen(false)
     } catch (err: any) {
-      alert(err.message || "Gagal menyimpan outlet")
+      toast.error(err.message || "Gagal menyimpan outlet")
     }
   }
 
   const isSaving = createMutation.isPending || updateMutation.isPending
+
+  const handleDelete = async (outlet: Outlet) => {
+    try {
+      await deleteMutation.mutateAsync(outlet.id)
+      toast.success("Outlet berhasil dihapus")
+    } catch (err: any) {
+      toast.error(err.message || "Gagal menghapus outlet")
+    }
+  }
 
   // ─── Loading & Error Fallback ────────────────────
   if (isLoading) {
@@ -152,6 +167,12 @@ export default function OutletsPage() {
                     <span className="text-muted-foreground">{outlet.phone}</span>
                   </div>
                   <div className="flex items-center gap-2">
+                    <Clock className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-muted-foreground">
+                      {outlet.open_time?.substring(0, 5) || "08:00"} - {outlet.close_time?.substring(0, 5) || "22:00"}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
                     <Users className="h-4 w-4 text-muted-foreground" />
                     <Badge variant="secondary">
                       {outlet.employee_count || 0} employees
@@ -165,13 +186,36 @@ export default function OutletsPage() {
                     size="sm"
                     className="flex-1"
                     onClick={() => handleEdit(outlet)}
+                    disabled={deleteMutation.isPending}
                   >
                     <Pencil className="mr-1 h-4 w-4" />
                     Edit
                   </Button>
+                  <Button
+                    variant="destructive"
+                    size="icon"
+                    className="h-9 w-9"
+                    onClick={() => setDeleteTarget(outlet)}
+                    disabled={deleteMutation.isPending}
+                    title="Hapus Outlet"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
                   <div className="flex items-center gap-2 rounded-md border px-3">
                     <span className="text-xs text-muted-foreground">Active</span>
-                    <Switch checked={outlet.status === "active"} />
+                    <Switch 
+                      checked={outlet.status === "active"}
+                      onCheckedChange={async (checked) => {
+                        const newStatus = checked ? "active" : "inactive"
+                        try {
+                          await statusMutation.mutateAsync({ id: outlet.id, status: newStatus })
+                          toast.success("Status outlet diperbarui")
+                        } catch (e: any) {
+                          toast.error(e.message || "Gagal mengubah status")
+                        }
+                      }}
+                      disabled={statusMutation.isPending}
+                    />
                   </div>
                 </div>
               </CardContent>
@@ -287,6 +331,15 @@ export default function OutletsPage() {
           </form>
         </DialogContent>
       </Dialog>
+      <ConfirmDialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => !open && setDeleteTarget(null)}
+        title="Hapus Outlet"
+        description={`Apakah Anda yakin ingin menghapus outlet "${deleteTarget?.name}" secara permanen? Operasi ini tidak dapat dibatalkan.`}
+        confirmLabel="Hapus"
+        onConfirm={() => deleteTarget && handleDelete(deleteTarget)}
+        isLoading={deleteMutation.isPending}
+      />
     </>
   )
 }

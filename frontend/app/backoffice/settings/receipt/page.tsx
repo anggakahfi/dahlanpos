@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useRef, useEffect } from "react"
 import { PageHeader } from "@/components/backoffice/page-header"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -10,11 +10,77 @@ import { Switch } from "@/components/ui/switch"
 import { Separator } from "@/components/ui/separator"
 import { FieldGroup, Field, FieldLabel } from "@/components/ui/field"
 import { Upload, Image as ImageIcon } from "lucide-react"
+import { useSettings, useUpdateSettings } from "@/features/backoffice/settings/hooks/useSettings"
+import { useOutlets } from "@/features/backoffice/outlets/hooks/useOutlets"
+import { uploadImage } from "@/lib/api"
+import { toast } from "sonner"
 
 export default function ReceiptSettingsPage() {
+  const { data: settings, isLoading: isSettingsLoading } = useSettings()
+  const { data: outlets, isLoading: isOutletsLoading } = useOutlets()
+  const updateMutation = useUpdateSettings()
+  
+  const defaultOutlet = outlets?.[0]
+  const isLoading = isSettingsLoading || isOutletsLoading
+
   const [headerText, setHeaderText] = useState("")
-  const [footerMessage, setFooterMessage] = useState("Terima kasih!")
+  const [footerMessage, setFooterMessage] = useState("")
   const [showTax, setShowTax] = useState(true)
+  const [logoUrl, setLogoUrl] = useState("")
+  const [isUploading, setIsUploading] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    if (settings?.receipt) {
+      setHeaderText(settings.receipt.header_text || "")
+      setFooterMessage(settings.receipt.footer_message || "")
+      setShowTax(settings.receipt.show_tax_breakdown ?? true)
+      setLogoUrl(settings.receipt.logo_url || "")
+    }
+  }, [settings])
+
+  const handleUploadClick = () => fileInputRef.current?.click()
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    try {
+      setIsUploading(true)
+      const url = await uploadImage(file)
+      setLogoUrl(url)
+    } catch (err: any) {
+      toast.error(err.message || "Failed to upload image")
+    } finally {
+      setIsUploading(false)
+    }
+  }
+
+  const handleSave = async () => {
+    if (!settings) return
+    try {
+      await updateMutation.mutateAsync({
+        ...settings,
+        receipt: {
+          logo_url: logoUrl,
+          header_text: headerText,
+          footer_message: footerMessage,
+          show_tax_breakdown: showTax,
+        },
+      })
+      toast.success("Settings saved successfully!")
+    } catch (err: any) {
+      toast.error(err.message || "Failed to save settings")
+    }
+  }
+
+  if (isLoading) {
+    return (
+      <>
+        <PageHeader title="Receipt Template" />
+        <div className="p-6">Loading settings...</div>
+      </>
+    )
+  }
 
   return (
     <>
@@ -32,13 +98,18 @@ export default function ReceiptSettingsPage() {
                 <Field>
                   <FieldLabel>Upload Logo</FieldLabel>
                   <div className="flex items-center gap-4">
-                    <div className="flex h-20 w-20 items-center justify-center rounded-lg border-2 border-dashed bg-muted">
-                      <ImageIcon className="h-8 w-8 text-muted-foreground" />
+                    <div className="flex h-20 w-20 flex-shrink-0 items-center justify-center overflow-hidden rounded-lg border-2 border-dashed bg-muted">
+                      {logoUrl ? (
+                        <img src={logoUrl} alt="Logo" className="h-full w-full object-contain" />
+                      ) : (
+                        <ImageIcon className="h-8 w-8 text-muted-foreground" />
+                      )}
                     </div>
-                    <Button variant="outline">
+                    <Button variant="outline" onClick={handleUploadClick} disabled={isUploading}>
                       <Upload className="mr-2 h-4 w-4" />
-                      Upload
+                      {isUploading ? "Uploading..." : "Upload Logo"}
                     </Button>
+                    <input type="file" className="hidden" ref={fileInputRef} onChange={handleFileChange} accept="image/png, image/jpeg, image/webp" />
                   </div>
                   <p className="mt-1 text-xs text-muted-foreground">
                     Max 1MB, PNG or JPG, 200x200px recommended
@@ -48,11 +119,11 @@ export default function ReceiptSettingsPage() {
                 <Field>
                   <FieldLabel>Outlet Info</FieldLabel>
                   <div className="rounded-lg border bg-muted/50 p-4 text-sm">
-                    <p className="font-medium">KopaKopi Central</p>
-                    <p className="text-muted-foreground">
-                      Jl. Sudirman No. 123, Jakarta Pusat
+                    <p className="font-medium">{defaultOutlet?.name || "KopaKopi Central"}</p>
+                    <p className="text-muted-foreground whitespace-pre-wrap">
+                      {defaultOutlet?.address || "Jl. Sudirman No. 123, Jakarta Pusat"}
                     </p>
-                    <p className="text-muted-foreground">021-12345678</p>
+                    <p className="text-muted-foreground">{defaultOutlet?.phone || "021-12345678"}</p>
                   </div>
                   <p className="mt-1 text-xs text-muted-foreground">
                     This info is pulled from your outlet settings
@@ -97,7 +168,13 @@ export default function ReceiptSettingsPage() {
                 </div>
               </FieldGroup>
 
-              <Button className="mt-6 w-full">Save Changes</Button>
+              <Button
+                className="mt-6 w-full"
+                onClick={handleSave}
+                disabled={updateMutation.isPending}
+              >
+                {updateMutation.isPending ? "Saving..." : "Save Changes"}
+              </Button>
             </CardContent>
           </Card>
 
@@ -110,18 +187,22 @@ export default function ReceiptSettingsPage() {
               <div className="mx-auto w-64 rounded-lg border bg-card p-4 font-mono text-xs shadow-sm">
                 {/* Logo Placeholder */}
                 <div className="mb-3 flex h-12 items-center justify-center">
-                  <div className="flex h-10 w-10 items-center justify-center rounded bg-primary text-primary-foreground font-bold text-sm">
-                    DP
-                  </div>
+                  {logoUrl ? (
+                    <img src={logoUrl} alt="Receipt Logo" className="h-10 w-auto object-contain" />
+                  ) : (
+                    <div className="flex h-10 w-10 items-center justify-center rounded bg-primary text-primary-foreground font-bold text-sm">
+                      DP
+                    </div>
+                  )}
                 </div>
 
                 {/* Outlet Info */}
                 <div className="mb-3 text-center">
-                  <p className="font-bold">KopaKopi Central</p>
-                  <p className="text-muted-foreground">
-                    Jl. Sudirman No. 123, Jakarta
+                  <p className="font-bold">{defaultOutlet?.name || "KopaKopi Central"}</p>
+                  <p className="text-muted-foreground whitespace-pre-wrap">
+                    {defaultOutlet?.address || "Jl. Sudirman No. 123, Jakarta"}
                   </p>
-                  <p className="text-muted-foreground">021-12345678</p>
+                  <p className="text-muted-foreground">{defaultOutlet?.phone || "021-12345678"}</p>
                 </div>
 
                 {headerText && (

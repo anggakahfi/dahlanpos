@@ -46,6 +46,16 @@ func (r *activityLogRepo) FindAll(ctx context.Context, filter repository.Activit
 		args = append(args, *filter.ActivityType)
 		argIdx++
 	}
+	if filter.StartDate != nil {
+		conditions = append(conditions, fmt.Sprintf("a.created_at >= $%d", argIdx))
+		args = append(args, *filter.StartDate)
+		argIdx++
+	}
+	if filter.EndDate != nil {
+		conditions = append(conditions, fmt.Sprintf("a.created_at <= $%d", argIdx))
+		args = append(args, *filter.EndDate)
+		argIdx++
+	}
 
 	where := ""
 	if len(conditions) > 0 {

@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/dialog"
 import { Separator } from "@/components/ui/separator"
 import { Search, Receipt, Eye, RotateCcw, Printer } from "lucide-react"
-import { getCashierTransactions } from "@/lib/api"
+import { getCashierTransactions, getCurrentShift } from "@/lib/api"
 import type { Transaction } from "@/lib/types"
 
 export default function HistoryPage() {
@@ -23,22 +23,32 @@ export default function HistoryPage() {
   const [showDetail, setShowDetail] = useState(false)
   const [isMounted, setIsMounted] = useState(false)
   const [transactionList, setTransactionList] = useState<Transaction[]>([])
+  const [hasActiveShift, setHasActiveShift] = useState(true)
 
   useEffect(() => {
     setIsMounted(true)
-    getCashierTransactions()
-      .then((res) => setTransactionList(res.data || []))
-      .catch(() => {})
+    getCurrentShift()
+      .then((shift) => {
+        if (!shift || !shift.id) {
+          setHasActiveShift(false)
+          return
+        }
+        setHasActiveShift(true)
+        return getCashierTransactions({ shift_id: shift.id })
+      })
+      .then((res) => {
+        if (res) {
+          setTransactionList(res.data || [])
+        }
+      })
+      .catch((err) => {
+        console.error("Failed to fetch shift history:", err)
+      })
   }, [])
 
   if (!isMounted) return null
 
-  const todayTransactions = transactionList.filter((t) => {
-    const today = new Date().toISOString().split("T")[0]
-    return t.date === today
-  })
-
-  const filteredTransactions = todayTransactions.filter((t) =>
+  const filteredTransactions = transactionList.filter((t) =>
     t.orderId.toLowerCase().includes(searchQuery.toLowerCase())
   )
 
@@ -93,7 +103,9 @@ export default function HistoryPage() {
         <div>
           <h1 className="text-2xl font-semibold">Riwayat Transaksi</h1>
           <p className="text-sm text-muted-foreground">
-            {filteredTransactions.length} transaksi hari ini
+            {!hasActiveShift 
+              ? "Tidak ada shift aktif"
+              : `${filteredTransactions.length} transaksi pada shift ini`}
           </p>
         </div>
         <div className="relative w-64">
@@ -160,7 +172,7 @@ export default function HistoryPage() {
             {filteredTransactions.length === 0 ? (
               <div className="p-8 text-center text-muted-foreground">
                 <Receipt className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                <p>Belum ada transaksi hari ini</p>
+                <p>{!hasActiveShift ? "Buka shift untuk mulai bertransaksi" : "Belum ada transaksi pada shift ini"}</p>
               </div>
             ) : (
               filteredTransactions.map((transaction) => (
@@ -213,6 +225,8 @@ export default function HistoryPage() {
               <div className="grid grid-cols-2 gap-2 text-sm">
                 <div className="text-muted-foreground">No. Struk</div>
                 <div className="font-medium">{selectedTransaction.orderId}</div>
+                <div className="text-muted-foreground">Pelanggan</div>
+                <div className="font-medium">{selectedTransaction.customerName || "-"}</div>
                 <div className="text-muted-foreground">Waktu</div>
                 <div className="font-medium">
                   {selectedTransaction.date} {selectedTransaction.time}

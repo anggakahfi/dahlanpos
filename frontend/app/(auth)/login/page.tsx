@@ -4,22 +4,20 @@ import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { LogIn } from "lucide-react"
 import { loginOAuth } from "@/lib/api"
+import { GoogleOAuthProvider, GoogleLogin } from "@react-oauth/google"
 
 export default function LoginPage() {
   const router = useRouter()
-  const [isLoading, setIsLoading] = useState(false)
   const [email, setEmail] = useState("")
+  const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState("")
 
-  const handleOAuthLogin = async () => {
+  const handleOAuthLogin = async (idToken: string) => {
     setIsLoading(true)
     setError("")
     try {
-      const result = await loginOAuth(email || "owner@smallthings.com")
+      const result = await loginOAuth(idToken)
       if (result.user.role === "owner") {
         router.push("/backoffice")
       } else {
@@ -31,6 +29,9 @@ export default function LoginPage() {
       setIsLoading(false)
     }
   }
+
+  const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || "112899621345-lfles6vamavj2ouc3b6todsidq6jgivn.apps.googleusercontent.com"
+  const isDevMode = false
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
@@ -46,30 +47,63 @@ export default function LoginPage() {
         </CardHeader>
         <CardContent>
           <div className="flex flex-col gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="email">Email (dev mode)</Label>
-              <Input
-                id="email"
-                type="email"
-                placeholder="owner@smallthings.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-              />
-            </div>
-            {error && (
-              <p className="text-sm text-destructive text-center">{error}</p>
+            {isDevMode && (
+              <div className="space-y-2 mb-2 p-3 bg-muted rounded-md border border-dashed">
+                <p className="text-xs text-muted-foreground mb-2 text-center text-orange-600 font-semibold">
+                  ⚠️ DEV MODE ACTIVE (Real OAuth Disabled)
+                </p>
+                <input
+                  type="email"
+                  placeholder="owner@smallthings.com"
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleOAuthLogin(email)}
+                />
+                <Button 
+                  variant="outline" 
+                  className="w-full"
+                  onClick={() => handleOAuthLogin(email)}
+                  disabled={isLoading}
+                >
+                  {isLoading ? "Masuk..." : "Simulasi Login"}
+                </Button>
+              </div>
             )}
-            <Button 
-              variant="outline" 
-              className="w-full h-12 text-base font-medium flex items-center justify-center gap-2" 
-              onClick={handleOAuthLogin}
-              disabled={isLoading}
-            >
-              <LogIn className="h-5 w-5" />
-              {isLoading ? "Memvalidasi..." : "Masuk dengan Google"}
-            </Button>
+
+            {error && (
+              <p className="text-sm text-destructive text-center p-2 bg-destructive/10 rounded-md">
+                {error}
+              </p>
+            )}
+            
+            {isLoading ? (
+              <Button disabled className="w-full h-12 text-base font-medium">
+                Memvalidasi Identitas...
+              </Button>
+            ) : !isDevMode && (
+              <div className="flex justify-center w-full">
+                <GoogleOAuthProvider clientId={clientId}>
+                  <GoogleLogin
+                    onSuccess={async (credentialResponse: any) => {
+                      if (credentialResponse.credential) {
+                        await handleOAuthLogin(credentialResponse.credential);
+                      }
+                    }}
+                    onError={() => {
+                      setError("Otentikasi Google gagal atau dibatalkan.");
+                    }}
+                    useOneTap
+                    shape="rectangular"
+                    theme="outline"
+                    width="100%"
+                  />
+                </GoogleOAuthProvider>
+              </div>
+            )}
+            
             <p className="text-xs text-center text-muted-foreground mt-4 px-4 leading-relaxed">
-              Gunakan email yang didaftarkan oleh Owner. Dev mode: masukkan email langsung.
+              Silakan login dengan akun admin/kasir yang telah ditugaskan.
             </p>
           </div>
         </CardContent>

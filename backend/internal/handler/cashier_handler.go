@@ -63,6 +63,25 @@ func (h *CashierHandler) GetCurrentShift(c *gin.Context) {
 	RespondSuccess(c, http.StatusOK, shift)
 }
 
+// GET /cashier/shifts/current/summary
+func (h *CashierHandler) GetCurrentShiftSummary(c *gin.Context) {
+	claims := middleware.GetUserClaims(c)
+
+	shift, err := h.shiftUC.GetCurrentShift(c.Request.Context(), claims.UserID)
+	if err != nil {
+		RespondError(c, http.StatusNotFound, "NOT_FOUND", "Anda tidak memiliki shift aktif")
+		return
+	}
+
+	summary, err := h.shiftUC.GetShiftSummary(c.Request.Context(), shift.ID)
+	if err != nil {
+		RespondError(c, http.StatusInternalServerError, "INTERNAL_ERROR", "Gagal memproses rekap shift")
+		return
+	}
+
+	RespondSuccess(c, http.StatusOK, summary)
+}
+
 // POST /cashier/shifts/close
 func (h *CashierHandler) CloseShift(c *gin.Context) {
 	var req struct {
@@ -80,7 +99,36 @@ func (h *CashierHandler) CloseShift(c *gin.Context) {
 		RespondError(c, http.StatusUnprocessableEntity, "UNPROCESSABLE", err.Error())
 		return
 	}
-	RespondSuccess(c, http.StatusOK, shift)
+
+	summary, _ := h.shiftUC.GetShiftSummary(c.Request.Context(), shift.ID)
+
+	response := gin.H{
+		"id":                 shift.ID,
+		"outlet_id":          shift.OutletID,
+		"started_at":         shift.StartedAt,
+		"closed_at":          shift.ClosedAt,
+		"starting_cash":      shift.StartingCash,
+		"ending_cash":        shift.EndingCash,
+		"expected_cash":      shift.ExpectedCash,
+		"discrepancy":        shift.Discrepancy,
+		"discrepancy_note":   shift.DiscrepancyNote,
+		"status":             shift.Status,
+		"total_sales":        0.0,
+		"total_transactions": 0,
+		"cash_sales":         0.0,
+		"qris_sales":         0.0,
+		"card_sales":         0.0,
+	}
+
+	if summary != nil {
+		response["total_sales"] = summary.TotalSales
+		response["total_transactions"] = summary.TotalTransactions
+		response["cash_sales"] = summary.CashSales
+		response["qris_sales"] = summary.QRISSales
+		response["card_sales"] = summary.CardSales
+	}
+
+	RespondSuccess(c, http.StatusOK, response)
 }
 
 // POST /cashier/transactions
@@ -98,6 +146,21 @@ func (h *CashierHandler) CreateTransaction(c *gin.Context) {
 		return
 	}
 	RespondSuccess(c, http.StatusCreated, txn)
+}
+
+// GET /cashier/transactions/:id
+func (h *CashierHandler) GetTransaction(c *gin.Context) {
+	id, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		RespondError(c, http.StatusBadRequest, "VALIDATION_ERROR", "Invalid transaction ID")
+		return
+	}
+	txn, err := h.txnUC.GetTransaction(c.Request.Context(), id)
+	if err != nil {
+		RespondError(c, http.StatusNotFound, "NOT_FOUND", "Transaction not found")
+		return
+	}
+	RespondSuccess(c, http.StatusOK, txn)
 }
 
 // POST /cashier/transactions/:id/void
@@ -143,8 +206,10 @@ func (h *CashierHandler) RegisterRoutes(rg *gin.RouterGroup) {
 	cashier.GET("/menu", h.GetMenu)
 	cashier.POST("/shifts/open", h.OpenShift)
 	cashier.GET("/shifts/current", h.GetCurrentShift)
+	cashier.GET("/shifts/current/summary", h.GetCurrentShiftSummary)
 	cashier.POST("/shifts/close", h.CloseShift)
 	cashier.POST("/transactions", h.CreateTransaction)
 	cashier.POST("/transactions/:id/void", h.VoidTransaction)
 	cashier.GET("/transactions", h.ListTransactions)
+	cashier.GET("/transactions/:id", h.GetTransaction)
 }

@@ -4,11 +4,13 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/smallthingscoffee/pos-backend/internal/domain"
 )
+
 
 type shiftRepo struct {
 	pool *pgxpool.Pool
@@ -27,7 +29,8 @@ func (r *shiftRepo) FindOpenByUser(ctx context.Context, userID uuid.UUID) (*doma
 		 FROM shifts s
 		 JOIN users u ON s.user_id = u.id
 		 JOIN outlets o ON s.outlet_id = o.id
-		 WHERE s.user_id = $1 AND s.status = 'open'`, userID,
+		 WHERE s.user_id = $1 AND s.status = 'open'
+		 ORDER BY s.started_at DESC LIMIT 1`, userID,
 	).Scan(
 		&s.ID, &s.UserID, &s.OutletID, &s.StartedAt, &s.ClosedAt, &s.StartingCash,
 		&s.EndingCash, &s.ExpectedCash, &s.Discrepancy, &s.DiscrepancyNote, &s.Status,
@@ -60,7 +63,7 @@ func (r *shiftRepo) FindByID(ctx context.Context, id uuid.UUID) (*domain.Shift, 
 	return &s, nil
 }
 
-func (r *shiftRepo) FindAll(ctx context.Context, outletID *uuid.UUID, page, perPage int) ([]domain.Shift, int64, error) {
+func (r *shiftRepo) FindAll(ctx context.Context, outletID *uuid.UUID, userID *uuid.UUID, startDate *time.Time, endDate *time.Time, page, perPage int) ([]domain.Shift, int64, error) {
 	var conditions []string
 	var args []interface{}
 	argIdx := 1
@@ -68,6 +71,21 @@ func (r *shiftRepo) FindAll(ctx context.Context, outletID *uuid.UUID, page, perP
 	if outletID != nil {
 		conditions = append(conditions, fmt.Sprintf("s.outlet_id = $%d", argIdx))
 		args = append(args, *outletID)
+		argIdx++
+	}
+	if userID != nil {
+		conditions = append(conditions, fmt.Sprintf("s.user_id = $%d", argIdx))
+		args = append(args, *userID)
+		argIdx++
+	}
+	if startDate != nil {
+		conditions = append(conditions, fmt.Sprintf("s.started_at >= $%d", argIdx))
+		args = append(args, *startDate)
+		argIdx++
+	}
+	if endDate != nil {
+		conditions = append(conditions, fmt.Sprintf("s.started_at <= $%d", argIdx))
+		args = append(args, *endDate)
 		argIdx++
 	}
 
@@ -120,6 +138,7 @@ func (r *shiftRepo) FindAll(ctx context.Context, outletID *uuid.UUID, page, perP
 	return shifts, total, rows.Err()
 }
 
+
 func (r *shiftRepo) Create(ctx context.Context, shift *domain.Shift) error {
 	return r.pool.QueryRow(ctx,
 		`INSERT INTO shifts (user_id, outlet_id, starting_cash) VALUES ($1, $2, $3) RETURNING id, started_at`,
@@ -129,9 +148,43 @@ func (r *shiftRepo) Create(ctx context.Context, shift *domain.Shift) error {
 
 func (r *shiftRepo) Close(ctx context.Context, shift *domain.Shift) error {
 	_, err := r.pool.Exec(ctx,
-		`UPDATE shifts SET closed_at=NOW(), ending_cash=$1, expected_cash=$2, discrepancy=$3,
-		 discrepancy_note=$4, status='closed' WHERE id=$5`,
+		`UPDATE shifts SET closed_at = NOW(), ending_cash = $1, expected_cash = $2, discrepancy = $3, discrepancy_note = $4, status = 'closed'
+		 WHERE id = $5`,
 		shift.EndingCash, shift.ExpectedCash, shift.Discrepancy, shift.DiscrepancyNote, shift.ID,
 	)
 	return err
+}
+
+func (r *shiftRepo) AutoCloseExpiredShifts(ctx context.Context) (int64, error) {
+	query := `
+		WITH expired_shifts AS (
+			SELECT s.id 
+			FROM shifts s
+			JOIN outlets o ON s.outlet_id = o.id
+			WHERE s.status = 'open'
+			  AND o.closing_time IS NOT NULL AND o.opening_time IS NOT NULL
+			  AND (
+				(o.closing_time >= o.opening_time AND 
+				 ((CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Jakarta')::time > (o.closing_time + interval '30 minutes') OR 
+				  (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Jakarta')::time < o.opening_time)
+				)
+				OR
+				(o.closing_time < o.opening_time AND 
+				 (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Jakarta')::time > (o.closing_time + interval '30 minutes') AND
+				 (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Jakarta')::time < o.opening_time
+				)
+			  )
+		)
+		UPDATE shifts s
+		SET status = 'closed',
+			closed_at = NOW(),
+			discrepancy_note = 'Sistem: Auto-Closed (Melewati batas jam operasional + 30 menit)',
+			ending_cash = starting_cash,
+			expected_cash = starting_cash,
+			discrepancy = 0
+		FROM expired_shifts e
+		WHERE s.id = e.id
+	`
+	tag, err := r.pool.Exec(ctx, query)
+	return tag.RowsAffected(), err
 }

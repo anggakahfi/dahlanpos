@@ -27,12 +27,15 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { FieldGroup, Field, FieldLabel } from "@/components/ui/field"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Search, Plus, Pencil, Trash2, AlertTriangle, X, Star, Image as ImageIcon } from "lucide-react"
+import { uploadImage } from "@/lib/api"
 import { useItems, useCreateItem, useUpdateItem, useDeleteItem } from "@/features/backoffice/items/hooks/useItems"
 import { useCategories } from "@/features/backoffice/categories/hooks/useCategories"
 import { useModifiers } from "@/features/backoffice/modifiers/hooks/useModifiers"
 import { itemSchema, type ItemFormData } from "@/features/backoffice/items/schemas/itemSchema"
 import type { Product } from "@/lib/types"
 import { cn } from "@/lib/utils"
+import { ConfirmDialog } from "@/components/ui/confirm-dialog"
+import { toast } from "sonner"
 
 export default function ItemsPage() {
   const [searchQuery, setSearchQuery] = useState("")
@@ -41,6 +44,8 @@ export default function ItemsPage() {
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [editingProduct, setEditingProduct] = useState<Product | null>(null)
   const [selectedModifiers, setSelectedModifiers] = useState<string[]>([])
+  const [isUploading, setIsUploading] = useState(false)
+  const [deleteTarget, setDeleteTarget] = useState<Product | null>(null)
 
   // ─── TanStack Query ─────────────────────────────
   const { data: itemsRes, isLoading, isError } = useItems()
@@ -64,6 +69,7 @@ export default function ItemsPage() {
       description: "",
       modifier_group_ids: [],
       is_active: true,
+      image_url: "",
     },
   })
 
@@ -88,6 +94,7 @@ export default function ItemsPage() {
       description: product.description || "",
       modifier_group_ids: product.modifier_group_ids || [],
       is_active: product.is_active,
+      image_url: product.image_url || "",
     })
     setIsModalOpen(true)
   }
@@ -105,6 +112,7 @@ export default function ItemsPage() {
       description: "",
       modifier_group_ids: [],
       is_active: true,
+      image_url: "",
     })
     setIsModalOpen(true)
   }
@@ -118,18 +126,19 @@ export default function ItemsPage() {
       } else {
         await createMutation.mutateAsync(payload)
       }
+      toast.success("Item berhasil disimpan")
       setIsModalOpen(false)
     } catch (err: any) {
-      alert(err.message || "Gagal menyimpan item")
+      toast.error(err.message || "Gagal menyimpan item")
     }
   }
 
   const handleDelete = async (id: string) => {
-    if (!confirm("Yakin ingin menghapus item ini?")) return
     try {
       await deleteMutation.mutateAsync(id)
+      toast.success("Item berhasil dihapus")
     } catch (err: any) {
-      alert(err.message || "Gagal menghapus item")
+      toast.error(err.message || "Gagal menghapus item")
     }
   }
 
@@ -145,7 +154,22 @@ export default function ItemsPage() {
     return "normal"
   }
 
-  const isSaving = createMutation.isPending || updateMutation.isPending
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setIsUploading(true)
+    try {
+      const url = await uploadImage(file)
+      form.setValue("image_url", url)
+      toast.success("Gambar berhasil diunggah")
+    } catch (err: any) {
+      toast.error(err.message || "Gagal mengunggah gambar")
+    } finally {
+      setIsUploading(false)
+    }
+  }
+
+  const isSaving = createMutation.isPending || updateMutation.isPending || isUploading
 
   if (isLoading) {
     return (
@@ -235,8 +259,12 @@ export default function ItemsPage() {
                   </div>
                 )}
                 <CardContent className="p-4">
-                  <div className="mb-3 flex aspect-square items-center justify-center rounded-lg bg-muted">
-                    <ImageIcon className="h-12 w-12 text-muted-foreground" />
+                  <div className="mb-3 flex aspect-square items-center justify-center overflow-hidden rounded-lg bg-muted">
+                    {product.image_url ? (
+                      <img src={product.image_url} alt={product.name} className="h-full w-full object-cover" />
+                    ) : (
+                      <ImageIcon className="h-12 w-12 text-muted-foreground" />
+                    )}
                   </div>
                   <h3 className="line-clamp-2 text-base font-semibold">{product.name}</h3>
                   <Badge variant="secondary" className="mt-1 text-xs">
@@ -268,7 +296,7 @@ export default function ItemsPage() {
                       variant="outline"
                       size="sm"
                       className="text-destructive hover:bg-destructive hover:text-destructive-foreground"
-                      onClick={() => handleDelete(product.id)}
+                      onClick={() => setDeleteTarget(product)}
                     >
                       <Trash2 className="h-4 w-4" />
                     </Button>
@@ -370,10 +398,28 @@ export default function ItemsPage() {
                 <Field>
                   <FieldLabel>Photo</FieldLabel>
                   <div className="flex items-center gap-4">
-                    <div className="flex h-24 w-24 items-center justify-center rounded-lg border-2 border-dashed bg-muted">
-                      <ImageIcon className="h-8 w-8 text-muted-foreground" />
+                    <div className="flex h-24 w-24 items-center justify-center overflow-hidden rounded-lg border-2 border-dashed bg-muted">
+                      {form.watch("image_url") ? (
+                        <img src={form.watch("image_url")} alt="Preview" className="h-full w-full object-cover" />
+                      ) : (
+                        <ImageIcon className="h-8 w-8 text-muted-foreground" />
+                      )}
                     </div>
-                    <Button type="button" variant="outline">Upload Photo</Button>
+                    <div>
+                      <Input 
+                        type="file" 
+                        id="photo-upload" 
+                        className="hidden" 
+                        accept="image/jpeg, image/png" 
+                        onChange={handleFileUpload} 
+                        disabled={isUploading}
+                      />
+                      <Button type="button" variant="outline" asChild disabled={isUploading}>
+                        <label htmlFor="photo-upload" className="cursor-pointer">
+                          {isUploading ? "Uploading..." : "Upload Photo"}
+                        </label>
+                      </Button>
+                    </div>
                   </div>
                   <p className="mt-1 text-xs text-muted-foreground">Max 2MB, JPG or PNG</p>
                 </Field>
@@ -411,6 +457,15 @@ export default function ItemsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <ConfirmDialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => !open && setDeleteTarget(null)}
+        title="Hapus Item"
+        description={`Apakah Anda yakin ingin menghapus item "${deleteTarget?.name}"? Tindakan ini tidak dapat dibatalkan.`}
+        confirmLabel="Hapus"
+        onConfirm={() => deleteTarget && handleDelete(deleteTarget.id)}
+        isLoading={deleteMutation.isPending}
+      />
     </>
   )
 }

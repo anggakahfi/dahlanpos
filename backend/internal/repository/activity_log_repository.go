@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/smallthingscoffee/pos-backend/internal/domain"
@@ -12,6 +13,8 @@ type ActivityLogFilter struct {
 	UserID       *uuid.UUID
 	OutletID     *uuid.UUID
 	ActivityType *domain.ActivityType
+	StartDate    *time.Time
+	EndDate      *time.Time
 	Page         int
 	PerPage      int
 }

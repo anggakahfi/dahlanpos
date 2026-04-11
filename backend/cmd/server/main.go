@@ -10,15 +10,18 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/joho/godotenv"
 	"github.com/smallthingscoffee/pos-backend/internal/config"
 	"github.com/smallthingscoffee/pos-backend/internal/domain"
 	"github.com/smallthingscoffee/pos-backend/internal/handler"
+	cloudinary_infra "github.com/smallthingscoffee/pos-backend/internal/infrastructure/cloudinary"
 	"github.com/smallthingscoffee/pos-backend/internal/infrastructure/postgres"
 	"github.com/smallthingscoffee/pos-backend/internal/middleware"
 	"github.com/smallthingscoffee/pos-backend/internal/usecase"
 )
 
 func main() {
+	_ = godotenv.Load() // Load .env file if it exists, otherwise ignore and use system env map
 	cfg := config.Load()
 
 	// ─── Database ───────────────────────────────────────────
@@ -39,25 +42,36 @@ func main() {
 	txnRepo := postgres.NewTransactionRepo(pool)
 	settingsRepo := postgres.NewSettingsRepo(pool)
 	activityLogRepo := postgres.NewActivityLogRepo(pool)
+	dashboardRepo := postgres.NewDashboardRepo(pool)
 
 	// ─── Usecases ───────────────────────────────────────────
-	authUC := usecase.NewAuthUsecase(userRepo, activityLogRepo, cfg.JWTSecret)
+	authUC := usecase.NewAuthUsecase(userRepo, activityLogRepo, cfg.JWTSecret, cfg.GoogleClientID)
 	cashierUC := usecase.NewCashierUsecase(productRepo, categoryRepo, modifierRepo)
-	shiftUC := usecase.NewShiftUsecase(shiftRepo, txnRepo, activityLogRepo)
-	txnUC := usecase.NewTransactionUsecase(txnRepo, activityLogRepo)
+	shiftUC := usecase.NewShiftUsecase(shiftRepo, txnRepo, activityLogRepo, outletRepo)
+	txnUC := usecase.NewTransactionUsecase(txnRepo, activityLogRepo, productRepo)
 	productUC := usecase.NewProductUsecase(productRepo)
 	categoryUC := usecase.NewCategoryUsecase(categoryRepo)
 	modifierUC := usecase.NewModifierUsecase(modifierRepo)
-	employeeUC := usecase.NewEmployeeUsecase(userRepo)
+	employeeUC := usecase.NewEmployeeUsecase(userRepo, activityLogRepo, cfg.ResendAPIKey)
 	outletUC := usecase.NewOutletUsecase(outletRepo)
 	settingsUC := usecase.NewSettingsUsecase(settingsRepo)
+	dashboardUC := usecase.NewDashboardUsecase(dashboardRepo)
+
+	// ─── Infrastructure ──────────────────────────────────────────
+	cloudinarySvc, err := cloudinary_infra.NewCloudinaryService(cfg.CloudinaryURL)
+	if err != nil {
+		log.Printf("⚠️ Failed to initialize Cloudinary: %v", err)
+	} else {
+		log.Println("✅ Cloudinary initialized")
+	}
 
 	// ─── Handlers ───────────────────────────────────────────
 	authHandler := handler.NewAuthHandler(authUC)
 	cashierHandler := handler.NewCashierHandler(cashierUC, shiftUC, txnUC)
 	backofficeHandler := handler.NewBackofficeHandler(
-		productUC, categoryUC, modifierUC, employeeUC, outletUC, settingsUC, txnUC, shiftUC,
+		productUC, categoryUC, modifierUC, employeeUC, outletUC, settingsUC, txnUC, shiftUC, dashboardUC, cloudinarySvc,
 	)
+	publicHandler := handler.NewPublicHandler(txnUC, settingsUC, outletUC)
 
 	// ─── Router ─────────────────────────────────────────────
 	router := gin.Default()
@@ -73,6 +87,9 @@ func main() {
 
 	// Public routes (no auth)
 	authHandler.RegisterRoutes(v1)
+	
+	publicGroup := v1.Group("/public")
+	publicHandler.RegisterRoutes(publicGroup)
 
 	// Protected routes (require JWT)
 	protected := v1.Group("")
@@ -96,9 +113,25 @@ func main() {
 	}
 
 	go func() {
-		log.Printf("🚀 Server starting on port %s", cfg.Port)
+		log.Printf(" Server starting on port %s", cfg.Port)
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("Server failed: %v", err)
+		}
+	}()
+
+	// Background job to Auto-Close expired shifts
+	go func() {
+		ticker := time.NewTicker(5 * time.Minute)
+		defer ticker.Stop()
+		for range ticker.C {
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			affected, err := shiftRepo.AutoCloseExpiredShifts(ctx)
+			if err != nil {
+				log.Printf("⚠️ AutoCloseExpiredShifts failed: %v", err)
+			} else if affected > 0 {
+				log.Printf("🧹 Auto-closed %d expired shifts", affected)
+			}
+			cancel()
 		}
 	}()
 

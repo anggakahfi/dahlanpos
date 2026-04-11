@@ -33,10 +33,12 @@ import {
 } from "@/components/ui/dialog"
 import { FieldGroup, Field, FieldLabel } from "@/components/ui/field"
 import { Search, Plus, Pencil, Trash2 } from "lucide-react"
-import { useEmployees, useCreateEmployee, useUpdateEmployee, useUpdateEmployeeStatus } from "@/features/backoffice/employees/hooks/useEmployees"
+import { useEmployees, useCreateEmployee, useUpdateEmployee, useUpdateEmployeeStatus, useDeleteEmployee } from "@/features/backoffice/employees/hooks/useEmployees"
 import { useOutlets } from "@/features/backoffice/outlets/hooks/useOutlets"
 import { employeeSchema, type EmployeeFormData } from "@/features/backoffice/employees/schemas/employeeSchema"
 import type { Employee, Outlet } from "@/lib/types"
+import { ConfirmDialog } from "@/components/ui/confirm-dialog"
+import { toast } from "sonner"
 
 export default function EmployeesPage() {
   const [searchQuery, setSearchQuery] = useState("")
@@ -45,6 +47,7 @@ export default function EmployeesPage() {
   const [statusFilter, setStatusFilter] = useState("all")
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<Employee | null>(null)
 
   // ─── TanStack Query ─────────────────────────────
   const { data: employeeList = [], isLoading, isError } = useEmployees()
@@ -52,6 +55,7 @@ export default function EmployeesPage() {
   const createMutation = useCreateEmployee()
   const updateMutation = useUpdateEmployee()
   const statusMutation = useUpdateEmployeeStatus()
+  const deleteMutation = useDeleteEmployee()
 
   // ─── React Hook Form + Zod ──────────────────────
   const form = useForm<EmployeeFormData>({
@@ -103,7 +107,7 @@ export default function EmployeesPage() {
   const onSubmit = async (data: EmployeeFormData) => {
     console.log("[SUBMIT EMPLOYEE]", { editing: !!editingEmployee, data })
     if (data.role === "cashier" && !data.outlet_id) {
-      alert("Pilih outlet untuk kasir")
+      toast.error("Pilih outlet untuk kasir")
       return
     }
     try {
@@ -112,9 +116,10 @@ export default function EmployeesPage() {
       } else {
         await createMutation.mutateAsync(data)
       }
+      toast.success("Karyawan berhasil disimpan")
       setIsModalOpen(false)
     } catch (err: any) {
-      alert(err.message || "Gagal menyimpan karyawan")
+      toast.error(err.message || "Gagal menyimpan karyawan")
     }
   }
 
@@ -241,8 +246,9 @@ export default function EmployeesPage() {
                           const newStatus = checked ? "active" : "inactive"
                           try {
                             await statusMutation.mutateAsync({ id: employee.id, status: newStatus })
+                            toast.success("Status karyawan diperbarui")
                           } catch (e: any) {
-                            alert(e.message || "Gagal mengubah status")
+                            toast.error(e.message || "Gagal mengubah status")
                           }
                         }}
                       />
@@ -256,6 +262,8 @@ export default function EmployeesPage() {
                           variant="ghost"
                           size="sm"
                           className="text-destructive hover:bg-destructive hover:text-destructive-foreground"
+                          onClick={() => setDeleteTarget(employee)}
+                          disabled={deleteMutation.isPending}
                         >
                           <Trash2 className="h-4 w-4" />
                         </Button>
@@ -358,6 +366,24 @@ export default function EmployeesPage() {
           </form>
         </DialogContent>
       </Dialog>
+      <ConfirmDialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => !open && setDeleteTarget(null)}
+        title="Hapus Karyawan"
+        description={`Apakah Anda yakin ingin menghapus "${deleteTarget?.name}"? Tindakan ini tidak dapat dibatalkan.`}
+        confirmLabel="Hapus"
+        onConfirm={async () => {
+          if (deleteTarget) {
+            try {
+              await deleteMutation.mutateAsync(deleteTarget.id)
+              toast.success("Karyawan berhasil dihapus")
+            } catch (e: any) {
+              toast.error(e.message || "Gagal menghapus karyawan")
+            }
+          }
+        }}
+        isLoading={deleteMutation.isPending}
+      />
     </>
   )
 }

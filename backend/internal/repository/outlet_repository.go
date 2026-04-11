@@ -14,4 +14,6 @@ type OutletRepository interface {
 	Create(ctx context.Context, outlet *domain.Outlet) error
 	Update(ctx context.Context, outlet *domain.Outlet) error
 	UpdateStatus(ctx context.Context, id uuid.UUID, status domain.OutletStatus) error
+	Delete(ctx context.Context, id uuid.UUID) error
 }
+

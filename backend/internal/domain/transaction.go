@@ -41,7 +41,8 @@ type Transaction struct {
 	UpdatedAt      time.Time     `json:"updated_at"`
 
 	// Populated by joins / nested loading
-	Items []TransactionItem `json:"items,omitempty"`
+	OutletName string            `json:"outlet_name,omitempty"`
+	Items      []TransactionItem `json:"items,omitempty"`
 }
 
 // TransactionItem is a line item within a transaction.
@@ -58,11 +59,15 @@ type TransactionItem struct {
 
 // CreateTransactionRequest is the inbound DTO for creating a transaction.
 type CreateTransactionRequest struct {
-	ShiftID       uuid.UUID                    `json:"shift_id" binding:"required"`
-	OutletID      uuid.UUID                    `json:"outlet_id" binding:"required"`
-	CustomerName  string                       `json:"customer_name"`
-	PaymentMethod PaymentMethod                `json:"payment_method" binding:"required"`
-	Items         []CreateTransactionItemInput `json:"items" binding:"required,min=1"`
+	ShiftID        uuid.UUID                    `json:"shift_id" binding:"required"`
+	OutletID       uuid.UUID                    `json:"outlet_id" binding:"required"`
+	CustomerName   string                       `json:"customer_name"`
+	PaymentMethod  PaymentMethod                `json:"payment_method" binding:"required"`
+	Subtotal       float64                      `json:"subtotal"`
+	TaxAmount      float64                      `json:"tax_amount"`
+	DiscountAmount float64                      `json:"discount_amount"`
+	TotalAmount    float64                      `json:"total_amount"`
+	Items          []CreateTransactionItemInput `json:"items" binding:"required,min=1"`
 }
 
 // CreateTransactionItemInput is a single item in the create transaction request.

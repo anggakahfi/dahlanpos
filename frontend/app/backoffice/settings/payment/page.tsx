@@ -1,21 +1,48 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { PageHeader } from "@/components/backoffice/page-header"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Switch } from "@/components/ui/switch"
 import { Banknote, QrCode } from "lucide-react"
+import { useSettings, useUpdateSettings } from "@/features/backoffice/settings/hooks/useSettings"
+import { toast } from "sonner"
 
 export default function PaymentSettingsPage() {
+  const { data: settings, isLoading: isFetching } = useSettings()
+  const updateMutation = useUpdateSettings()
   const [qrisEnabled, setQrisEnabled] = useState(true)
-  const [isLoading, setIsLoading] = useState(false)
+
+  useEffect(() => {
+    if (settings?.payment) {
+      setQrisEnabled(settings.payment.qris_enabled)
+    }
+  }, [settings])
 
   const handleSave = async () => {
-    setIsLoading(true)
-    // TODO: Replace with real API call to update settings
-    await new Promise((resolve) => setTimeout(resolve, 500))
-    setIsLoading(false)
+    if (!settings) return
+    try {
+      await updateMutation.mutateAsync({
+        ...settings,
+        payment: {
+          ...settings.payment,
+          qris_enabled: qrisEnabled,
+        },
+      })
+      toast.success("Payment settings saved successfully!")
+    } catch (err: any) {
+      toast.error(err.message || "Failed to save payment settings")
+    }
+  }
+
+  if (isFetching) {
+    return (
+      <>
+        <PageHeader title="Metode Pembayaran" />
+        <div className="p-6">Loading settings...</div>
+      </>
+    )
   }
 
   return (
@@ -80,8 +107,8 @@ export default function PaymentSettingsPage() {
 
           {/* Save Button */}
           <div className="flex justify-end">
-            <Button onClick={handleSave} disabled={isLoading}>
-              {isLoading ? "Menyimpan..." : "Simpan Perubahan"}
+            <Button onClick={handleSave} disabled={updateMutation.isPending}>
+              {updateMutation.isPending ? "Menyimpan..." : "Simpan Perubahan"}
             </Button>
           </div>
         </div>

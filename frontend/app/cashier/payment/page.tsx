@@ -6,10 +6,12 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
-import { Badge } from "@/components/ui/badge"
-import { ArrowLeft, Banknote, Smartphone, Check } from "lucide-react"
+import { ArrowLeft, Banknote, Smartphone, Check, AlertCircle } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { createTransaction } from "@/lib/api"
+import { useCartStore } from "@/features/cashier/stores/useCartStore"
 import type { CartItem } from "@/lib/types"
+import { useQueryClient } from "@tanstack/react-query"
 
 interface CheckoutData {
   items: CartItem[]
@@ -18,6 +20,8 @@ interface CheckoutData {
   tax: number
   total: number
   customerName: string
+  shiftId: string
+  outletId: string
 }
 
 const paymentMethods = [
@@ -29,11 +33,14 @@ const quickCashAmounts = [50000, 100000, 150000, 200000]
 
 export default function PaymentPage() {
   const router = useRouter()
+  const queryClient = useQueryClient()
+  const clearCart = useCartStore((s) => s.clearCart)
   const [checkoutData, setCheckoutData] = useState<CheckoutData | null>(null)
   const [selectedMethod, setSelectedMethod] = useState("cash")
   const [cashReceived, setCashReceived] = useState("")
   const [isProcessing, setIsProcessing] = useState(false)
   const [isSuccess, setIsSuccess] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     const data = sessionStorage.getItem("checkoutData")
@@ -56,21 +63,54 @@ export default function PaymentPage() {
   const change = cashAmount - (checkoutData?.total || 0)
 
   const handlePayment = async () => {
+    if (!checkoutData) return
     setIsProcessing(true)
-    
-    // Simulate payment processing
-    await new Promise((resolve) => setTimeout(resolve, 1500))
-    
-    setIsProcessing(false)
-    setIsSuccess(true)
-    
-    // Clear checkout data
-    sessionStorage.removeItem("checkoutData")
-    
-    // Redirect after showing success
-    setTimeout(() => {
-      router.push("/cashier/receipt")
-    }, 1500)
+    setError(null)
+
+    try {
+      const payload = {
+        shift_id: checkoutData.shiftId,
+        outlet_id: checkoutData.outletId,
+        customer_name: checkoutData.customerName || undefined,
+        payment_method: selectedMethod as "cash" | "qris",
+        items: checkoutData.items.map((item: any) => ({
+          product_id: item.menuItemId,
+          product_name: item.name,
+          quantity: item.quantity,
+          unit_price: item.price,
+          modifiers: (item.modifiers || []).map((m: any) => ({
+            group_name: m.groupName,
+            selected_option: m.selectedOption,
+            price_impact: m.priceImpact,
+          })),
+        })),
+        subtotal: checkoutData.subtotal,
+        tax_amount: checkoutData.tax,
+        discount_amount: checkoutData.discount,
+        total_amount: checkoutData.total,
+      }
+
+      const txn = await createTransaction(payload)
+
+      // Store transaction ID for receipt page + clear cart
+      sessionStorage.setItem("lastTransactionId", txn.id)
+      sessionStorage.setItem("lastPaymentMethod", selectedMethod)
+      sessionStorage.setItem("lastCashReceived", cashReceived ? cashAmount.toString() : "0")
+      sessionStorage.removeItem("checkoutData")
+      clearCart()
+
+      // Invalidate caches so other pages reflect the new transaction
+      queryClient.invalidateQueries({ queryKey: ["shiftSummary"] })
+      queryClient.invalidateQueries({ queryKey: ["transactions"] })
+
+      setIsSuccess(true)
+      setTimeout(() => {
+        router.push("/cashier/receipt")
+      }, 1500)
+    } catch (err: any) {
+      setError(err?.message || "Terjadi kesalahan saat memproses pembayaran. Coba lagi.")
+      setIsProcessing(false)
+    }
   }
 
   const isPaymentValid = () => {
@@ -80,9 +120,7 @@ export default function PaymentPage() {
     return true
   }
 
-  if (!checkoutData) {
-    return null
-  }
+  if (!checkoutData) return null
 
   if (isSuccess) {
     return (
@@ -93,20 +131,14 @@ export default function PaymentPage() {
               <Check className="h-10 w-10 text-green-600" />
             </div>
             <h2 className="text-2xl font-semibold mb-2">Pembayaran Berhasil!</h2>
-            <p className="text-muted-foreground mb-4">
-              Transaksi telah selesai
-            </p>
+            <p className="text-muted-foreground mb-4">Transaksi telah disimpan di sistem</p>
             {selectedMethod === "cash" && change > 0 && (
               <div className="bg-muted rounded-lg p-4 mb-4">
                 <p className="text-sm text-muted-foreground">Kembalian</p>
-                <p className="text-2xl font-bold text-primary">
-                  {formatPrice(change)}
-                </p>
+                <p className="text-2xl font-bold text-primary">{formatPrice(change)}</p>
               </div>
             )}
-            <p className="text-sm text-muted-foreground">
-              Mencetak struk...
-            </p>
+            <p className="text-sm text-muted-foreground">Mencetak struk...</p>
           </CardContent>
         </Card>
       </div>
@@ -117,11 +149,7 @@ export default function PaymentPage() {
     <div className="flex h-full">
       {/* Left: Order Summary */}
       <div className="w-1/2 p-6 border-r border-border overflow-auto">
-        <Button
-          variant="ghost"
-          className="mb-4"
-          onClick={() => router.back()}
-        >
+        <Button variant="ghost" className="mb-4" onClick={() => router.back()}>
           <ArrowLeft className="h-4 w-4 mr-2" />
           Kembali
         </Button>
@@ -130,27 +158,19 @@ export default function PaymentPage() {
           <CardHeader>
             <CardTitle className="text-lg">Ringkasan Pesanan</CardTitle>
             {checkoutData.customerName && (
-              <p className="text-sm text-muted-foreground">
-                Pelanggan: {checkoutData.customerName}
-              </p>
+              <p className="text-sm text-muted-foreground">Pelanggan: {checkoutData.customerName}</p>
             )}
           </CardHeader>
           <CardContent className="space-y-4">
-            {/* Items */}
             <div className="space-y-3">
               {checkoutData.items.map((item) => (
                 <div key={item.id} className="flex justify-between text-sm">
-                  <span>
-                    {item.name} x{item.quantity}
-                  </span>
+                  <span>{item.name} x{item.quantity}</span>
                   <span className="font-medium">{formatPrice(item.subtotal)}</span>
                 </div>
               ))}
             </div>
-
             <Separator />
-
-            {/* Totals */}
             <div className="space-y-2 text-sm">
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Subtotal</span>
@@ -162,10 +182,12 @@ export default function PaymentPage() {
                   <span>-{formatPrice(checkoutData.discount)}</span>
                 </div>
               )}
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Pajak (10%)</span>
-                <span>{formatPrice(checkoutData.tax)}</span>
-              </div>
+              {checkoutData.tax > 0 && (
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Pajak</span>
+                  <span>{formatPrice(checkoutData.tax)}</span>
+                </div>
+              )}
               <Separator />
               <div className="flex justify-between font-semibold text-lg pt-2">
                 <span>Total</span>
@@ -180,8 +202,7 @@ export default function PaymentPage() {
       <div className="w-1/2 p-6 overflow-auto">
         <h2 className="text-xl font-semibold mb-6">Pilih Metode Pembayaran</h2>
 
-        {/* Payment Methods */}
-        <div className="grid grid-cols-3 gap-4 mb-6">
+        <div className="grid grid-cols-2 gap-4 mb-6">
           {paymentMethods.map((method) => {
             const Icon = method.icon
             return (
@@ -198,9 +219,7 @@ export default function PaymentPage() {
                 <div className="flex flex-col items-center gap-2">
                   <div className={cn(
                     "w-12 h-12 rounded-full flex items-center justify-center",
-                    selectedMethod === method.id
-                      ? "bg-primary text-primary-foreground"
-                      : "bg-muted"
+                    selectedMethod === method.id ? "bg-primary text-primary-foreground" : "bg-muted"
                   )}>
                     <Icon className="h-6 w-6" />
                   </div>
@@ -211,17 +230,12 @@ export default function PaymentPage() {
           })}
         </div>
 
-        {/* Cash Payment Options */}
         {selectedMethod === "cash" && (
           <div className="space-y-4">
             <div>
-              <label className="text-sm font-medium mb-2 block">
-                Uang Diterima
-              </label>
+              <label className="text-sm font-medium mb-2 block">Uang Diterima</label>
               <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
-                  Rp
-                </span>
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">Rp</span>
                 <Input
                   type="text"
                   placeholder="0"
@@ -231,41 +245,21 @@ export default function PaymentPage() {
                 />
               </div>
             </div>
-
-            {/* Quick Cash Buttons */}
-            <div className="grid grid-cols-4 gap-2">
+            <div className="grid grid-cols-2 gap-2">
               {quickCashAmounts.map((amount) => (
-                <Button
-                  key={amount}
-                  variant="outline"
-                  onClick={() => setCashReceived(amount.toString())}
-                >
+                <Button key={amount} variant="outline" onClick={() => setCashReceived(amount.toString())}>
                   {formatPrice(amount)}
                 </Button>
               ))}
             </div>
-            <Button
-              variant="outline"
-              className="w-full"
-              onClick={() => setCashReceived(checkoutData.total.toString())}
-            >
+            <Button variant="outline" className="w-full" onClick={() => setCashReceived(checkoutData.total.toString())}>
               Uang Pas ({formatPrice(checkoutData.total)})
             </Button>
-
-            {/* Change Display */}
             {cashAmount > 0 && (
-              <Card className={cn(
-                "p-4",
-                change >= 0 ? "bg-green-50 border-green-200" : "bg-red-50 border-red-200"
-              )}>
+              <Card className={cn("p-4", change >= 0 ? "bg-green-50 border-green-200" : "bg-red-50 border-red-200")}>
                 <div className="text-center">
-                  <p className="text-sm text-muted-foreground mb-1">
-                    {change >= 0 ? "Kembalian" : "Kurang"}
-                  </p>
-                  <p className={cn(
-                    "text-2xl font-bold",
-                    change >= 0 ? "text-green-600" : "text-red-600"
-                  )}>
+                  <p className="text-sm text-muted-foreground mb-1">{change >= 0 ? "Kembalian" : "Kurang"}</p>
+                  <p className={cn("text-2xl font-bold", change >= 0 ? "text-green-600" : "text-red-600")}>
                     {formatPrice(Math.abs(change))}
                   </p>
                 </div>
@@ -274,7 +268,6 @@ export default function PaymentPage() {
           </div>
         )}
 
-        {/* QRIS Payment Instructions */}
         {selectedMethod === "qris" && (
           <Card className="p-6 text-center bg-muted/50 border-dashed">
             <div className="w-24 h-24 bg-primary/10 mx-auto rounded-xl mb-4 flex items-center justify-center">
@@ -282,23 +275,28 @@ export default function PaymentPage() {
             </div>
             <h3 className="font-semibold text-lg mb-2">Pembayaran QRIS</h3>
             <p className="text-sm text-muted-foreground mb-4">
-              Arahkan pelanggan untuk scan QRIS toko yang tersedia di meja kasir. 
-              PENTING: Pastikan pembayaran telah berhasil sebelum menekan konfirmasi.
+              Arahkan pelanggan untuk scan QRIS toko. PENTING: Pastikan pembayaran telah berhasil sebelum konfirmasi.
             </p>
             <p className="font-bold text-2xl text-primary">{formatPrice(checkoutData.total)}</p>
           </Card>
         )}
 
-        {/* Pay Button */}
+        {error && (
+          <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg flex items-center gap-2 text-red-700 text-sm">
+            <AlertCircle className="h-4 w-4 shrink-0" />
+            {error}
+          </div>
+        )}
+
         <Button
           className="w-full mt-6 h-14 text-lg"
           size="lg"
           disabled={!isPaymentValid() || isProcessing}
           onClick={handlePayment}
         >
-          {isProcessing 
-            ? "Memproses..." 
-            : selectedMethod === "qris" 
+          {isProcessing
+            ? "Memproses..."
+            : selectedMethod === "qris"
               ? `Konfirmasi Bayar QRIS ${formatPrice(checkoutData.total)}`
               : `Bayar Tunai ${formatPrice(checkoutData.total)}`
           }

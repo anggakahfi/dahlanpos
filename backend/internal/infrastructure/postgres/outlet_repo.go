@@ -18,8 +18,9 @@ func NewOutletRepo(pool *pgxpool.Pool) *outletRepo {
 
 func (r *outletRepo) FindAll(ctx context.Context) ([]domain.Outlet, error) {
 	rows, err := r.pool.Query(ctx,
-		`SELECT id, name, address, phone, COALESCE(email, '') as email, COALESCE(open_time, '') as open_time, COALESCE(close_time, '') as close_time, status, created_at, updated_at
-		 FROM outlets ORDER BY name`)
+		`SELECT o.id, o.name, COALESCE(o.address, '') as address, COALESCE(o.phone, '') as phone, COALESCE(o.email, '') as email, COALESCE(o.open_time::text, '') as open_time, COALESCE(o.close_time::text, '') as close_time, o.status, o.created_at, COALESCE(o.updated_at, o.created_at) as updated_at,
+		 (SELECT COUNT(*) FROM users u WHERE u.outlet_id = o.id) as employee_count
+		 FROM outlets o ORDER BY o.name`)
 	if err != nil {
 		return nil, err
 	}
@@ -28,7 +29,7 @@ func (r *outletRepo) FindAll(ctx context.Context) ([]domain.Outlet, error) {
 	var outlets []domain.Outlet
 	for rows.Next() {
 		var o domain.Outlet
-		if err := rows.Scan(&o.ID, &o.Name, &o.Address, &o.Phone, &o.Email, &o.OpenTime, &o.CloseTime, &o.Status, &o.CreatedAt, &o.UpdatedAt); err != nil {
+		if err := rows.Scan(&o.ID, &o.Name, &o.Address, &o.Phone, &o.Email, &o.OpenTime, &o.CloseTime, &o.Status, &o.CreatedAt, &o.UpdatedAt, &o.EmployeeCount); err != nil {
 			return nil, err
 		}
 		outlets = append(outlets, o)
@@ -39,9 +40,10 @@ func (r *outletRepo) FindAll(ctx context.Context) ([]domain.Outlet, error) {
 func (r *outletRepo) FindByID(ctx context.Context, id uuid.UUID) (*domain.Outlet, error) {
 	var o domain.Outlet
 	err := r.pool.QueryRow(ctx,
-		`SELECT id, name, address, phone, COALESCE(email, '') as email, COALESCE(open_time, '') as open_time, COALESCE(close_time, '') as close_time, status, created_at, updated_at
-		 FROM outlets WHERE id = $1`, id,
-	).Scan(&o.ID, &o.Name, &o.Address, &o.Phone, &o.Email, &o.OpenTime, &o.CloseTime, &o.Status, &o.CreatedAt, &o.UpdatedAt)
+		`SELECT o.id, o.name, COALESCE(o.address, '') as address, COALESCE(o.phone, '') as phone, COALESCE(o.email, '') as email, COALESCE(o.open_time::text, '') as open_time, COALESCE(o.close_time::text, '') as close_time, o.status, o.created_at, COALESCE(o.updated_at, o.created_at) as updated_at,
+		 (SELECT COUNT(*) FROM users u WHERE u.outlet_id = o.id) as employee_count
+		 FROM outlets o WHERE o.id = $1`, id,
+	).Scan(&o.ID, &o.Name, &o.Address, &o.Phone, &o.Email, &o.OpenTime, &o.CloseTime, &o.Status, &o.CreatedAt, &o.UpdatedAt, &o.EmployeeCount)
 	if err != nil {
 		return nil, err
 	}
@@ -66,5 +68,10 @@ func (r *outletRepo) Update(ctx context.Context, outlet *domain.Outlet) error {
 
 func (r *outletRepo) UpdateStatus(ctx context.Context, id uuid.UUID, status domain.OutletStatus) error {
 	_, err := r.pool.Exec(ctx, `UPDATE outlets SET status=$1 WHERE id=$2`, status, id)
+	return err
+}
+
+func (r *outletRepo) Delete(ctx context.Context, id uuid.UUID) error {
+	_, err := r.pool.Exec(ctx, `DELETE FROM outlets WHERE id=$1`, id)
 	return err
 }

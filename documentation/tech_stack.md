@@ -56,5 +56,6 @@ Infrastruktur pendukung untuk menjamin kemudahan *development* lokal maupun saat
 
 Sistem eksternal yang dihubungkan untuk memperluas fungsionalitas aplikasi:
 
-*   **Identity Provider**: Google Cloud Console (OAuth Client ID) untuk fitur "Log in with Google".
+*   **Identity Provider**: Google Cloud Console (OAuth Client ID) untuk fitur "Log in with Google" yang divalidasi dengan `google.golang.org/api/idtoken`.
+*   **Email Delivery**: Resend API (via integrasi SMTP/HTTP HTTP Async) untuk mengirim notifikasi onboarding karyawan baru secara real-time.
 *   **Payment Gateway**: Xendit (Dalam tahap perencanaan/integrasi) untuk penerimaan QRIS / E-Wallet dinamis pada *Cashier Module*.

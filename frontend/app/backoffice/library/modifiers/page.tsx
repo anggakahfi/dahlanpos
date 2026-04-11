@@ -26,6 +26,8 @@ import { FieldGroup, Field, FieldLabel } from "@/components/ui/field"
 import { Plus, Pencil, Trash2, X } from "lucide-react"
 import { useModifiers, useCreateModifier, useUpdateModifier, useDeleteModifier } from "@/features/backoffice/modifiers/hooks/useModifiers"
 import type { ModifierGroup, ModifierOption } from "@/lib/types"
+import { ConfirmDialog } from "@/components/ui/confirm-dialog"
+import { toast } from "sonner"
 
 export default function ModifiersPage() {
   const [isModalOpen, setIsModalOpen] = useState(false)
@@ -33,6 +35,7 @@ export default function ModifiersPage() {
   const [modifierName, setModifierName] = useState("")
   const [options, setOptions] = useState<ModifierOption[]>([])
   const [isRequired, setIsRequired] = useState(false)
+  const [deleteTarget, setDeleteTarget] = useState<ModifierGroup | null>(null)
 
   // ─── TanStack Query ─────────────────────────────
   const { data: modifierList = [], isLoading, isError } = useModifiers()
@@ -91,18 +94,19 @@ export default function ModifiersPage() {
       } else {
         await createMutation.mutateAsync(data)
       }
+      toast.success("Modifier berhasil disimpan")
       setIsModalOpen(false)
     } catch (err: any) {
-      alert(err.message || "Gagal menyimpan modifier")
+      toast.error(err.message || "Gagal menyimpan modifier")
     }
   }
 
   const handleDelete = async (id: string) => {
-    if (!confirm("Yakin ingin menghapus modifier ini?")) return
     try {
       await deleteMutation.mutateAsync(id)
+      toast.success("Modifier berhasil dihapus")
     } catch (err: any) {
-      alert(err.message || "Gagal menghapus modifier")
+      toast.error(err.message || "Gagal menghapus modifier")
     }
   }
 
@@ -186,7 +190,7 @@ export default function ModifiersPage() {
                           variant="ghost"
                           size="sm"
                           className="text-destructive hover:bg-destructive hover:text-destructive-foreground"
-                          onClick={() => handleDelete(modifier.id)}
+                          onClick={() => setDeleteTarget(modifier)}
                         >
                           <Trash2 className="h-4 w-4" />
                         </Button>
@@ -281,6 +285,15 @@ export default function ModifiersPage() {
           </form>
         </DialogContent>
       </Dialog>
+      <ConfirmDialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => !open && setDeleteTarget(null)}
+        title="Hapus Modifier"
+        description={`Apakah Anda yakin ingin menghapus modifier "${deleteTarget?.name}"? Tindakan ini tidak dapat dibatalkan.`}
+        confirmLabel="Hapus"
+        onConfirm={() => deleteTarget && handleDelete(deleteTarget.id)}
+        isLoading={deleteMutation.isPending}
+      />
     </>
   )
 }

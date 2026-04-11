@@ -19,13 +19,7 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
+
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -35,8 +29,8 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { useState, useEffect } from "react"
-import { getOutlets, logout, getStoredUser } from "@/lib/api"
-import type { Outlet } from "@/lib/types"
+import { useRouter } from "next/navigation"
+import { logout, getAuthSession } from "@/lib/api"
 
 const navigation = [
   { name: "Dashboard", href: "/backoffice", icon: LayoutDashboard },
@@ -80,18 +74,14 @@ const navigation = [
 
 export function BackofficeSidebar() {
   const pathname = usePathname()
-  const [selectedOutlet, setSelectedOutlet] = useState("all")
+  const router = useRouter()
   const [isMounted, setIsMounted] = useState(false)
-  const [outletList, setOutletList] = useState<Outlet[]>([])
   const [user, setUser] = useState<{ name: string; role: string } | null>(null)
 
   useEffect(() => {
     setIsMounted(true)
-    const storedUser = getStoredUser()
-    if (storedUser) setUser(storedUser)
-    getOutlets()
-      .then((data) => setOutletList(data || []))
-      .catch(() => {})
+    const session = getAuthSession('owner')
+    if (session) setUser(session.user)
   }, [])
 
   if (!isMounted) {
@@ -122,22 +112,7 @@ export function BackofficeSidebar() {
         </Link>
       </div>
 
-      {/* Outlet Selector */}
-      <div className="border-b p-4">
-        <Select value={selectedOutlet} onValueChange={setSelectedOutlet}>
-          <SelectTrigger className="w-full">
-            <SelectValue placeholder="Select Outlet" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Outlets</SelectItem>
-            {outletList.map((outlet) => (
-              <SelectItem key={outlet.id} value={outlet.id}>
-                {outlet.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
+
 
       {/* Navigation */}
       <nav className="flex-1 overflow-y-auto px-2 py-4">
@@ -179,11 +154,15 @@ export function BackofficeSidebar() {
               </Link>
             </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem asChild>
-              <Link href="/login" className="text-destructive">
-                <LogOut className="mr-2 h-4 w-4" />
-                Logout
-              </Link>
+            <DropdownMenuItem
+              className="text-destructive focus:text-destructive"
+              onClick={async () => {
+                await logout('owner')
+                router.push('/login')
+              }}
+            >
+              <LogOut className="mr-2 h-4 w-4" />
+              Logout
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

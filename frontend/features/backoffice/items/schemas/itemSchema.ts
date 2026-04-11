@@ -10,6 +10,7 @@ export const itemSchema = z.object({
   description: z.string().optional().default(""),
   modifier_group_ids: z.array(z.string()).default([]),
   is_active: z.boolean().default(true),
+  image_url: z.string().optional(),
 })
 
 export type ItemFormData = z.infer<typeof itemSchema>

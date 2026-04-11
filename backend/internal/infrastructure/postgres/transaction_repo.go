@@ -31,12 +31,19 @@ func (r *transactionRepo) Create(ctx context.Context, txn *domain.Transaction) e
 	// Generate order ID: ORD-YYYYMMDD-XXX
 	var seq int
 	err = dbTx.QueryRow(ctx,
-		`SELECT COUNT(*) + 1 FROM transactions WHERE DATE(created_at) = CURRENT_DATE`,
+		`SELECT COUNT(*) + 1 FROM transactions WHERE DATE(created_at) = CURRENT_DATE AND outlet_id = $1`,
+		txn.OutletID,
 	).Scan(&seq)
 	if err != nil {
 		return err
 	}
-	txn.OrderID = fmt.Sprintf("ORD-%s-%03d", time.Now().Format("20060102"), seq)
+	
+	shortOutlet := "OUT"
+	if txn.OutletID != uuid.Nil {
+		shortOutlet = strings.ToUpper(txn.OutletID.String()[:4])
+	}
+	
+	txn.OrderID = fmt.Sprintf("ORD-%s-%s-%03d", shortOutlet, time.Now().Format("20060102"), seq)
 
 	// Insert transaction
 	err = dbTx.QueryRow(ctx,
@@ -87,14 +94,16 @@ func (r *transactionRepo) Create(ctx context.Context, txn *domain.Transaction) e
 func (r *transactionRepo) FindByID(ctx context.Context, id uuid.UUID) (*domain.Transaction, error) {
 	var txn domain.Transaction
 	err := r.pool.QueryRow(ctx,
-		`SELECT id, shift_id, outlet_id, order_id, customer_name, subtotal,
-		        discount_amount, tax_amount, total_amount, payment_method, payment_status,
-		        paid_at, created_at, updated_at
-		 FROM transactions WHERE id = $1`, id,
+		`SELECT t.id, t.shift_id, t.outlet_id, t.order_id, t.customer_name, t.subtotal,
+		        t.discount_amount, t.tax_amount, t.total_amount, t.payment_method, t.payment_status,
+		        t.paid_at, t.created_at, t.updated_at, COALESCE(o.name, 'N/A') as outlet_name
+		 FROM transactions t 
+		 LEFT JOIN outlets o ON t.outlet_id = o.id
+		 WHERE t.id = $1`, id,
 	).Scan(
 		&txn.ID, &txn.ShiftID, &txn.OutletID, &txn.OrderID, &txn.CustomerName, &txn.Subtotal,
 		&txn.DiscountAmount, &txn.TaxAmount, &txn.TotalAmount, &txn.PaymentMethod, &txn.PaymentStatus,
-		&txn.PaidAt, &txn.CreatedAt, &txn.UpdatedAt,
+		&txn.PaidAt, &txn.CreatedAt, &txn.UpdatedAt, &txn.OutletName,
 	)
 	if err != nil {
 		return nil, err
@@ -125,6 +134,11 @@ func (r *transactionRepo) FindAll(ctx context.Context, filter repository.Transac
 	if filter.PaymentMethod != nil {
 		conditions = append(conditions, fmt.Sprintf("t.payment_method = $%d", argIdx))
 		args = append(args, *filter.PaymentMethod)
+		argIdx++
+	}
+	if filter.SearchQuery != nil && *filter.SearchQuery != "" {
+		conditions = append(conditions, fmt.Sprintf("t.order_id ILIKE $%d", argIdx))
+		args = append(args, "%"+*filter.SearchQuery+"%")
 		argIdx++
 	}
 	if filter.DateFrom != nil {
@@ -161,8 +175,10 @@ func (r *transactionRepo) FindAll(ctx context.Context, filter repository.Transac
 	dataSQL := fmt.Sprintf(
 		`SELECT t.id, t.shift_id, t.outlet_id, t.order_id, t.customer_name, t.subtotal,
 		        t.discount_amount, t.tax_amount, t.total_amount, t.payment_method, t.payment_status,
-		        t.paid_at, t.created_at, t.updated_at
-		 FROM transactions t %s ORDER BY t.created_at DESC LIMIT $%d OFFSET $%d`, where, argIdx, argIdx+1)
+		        t.paid_at, t.created_at, t.updated_at, COALESCE(o.name, 'N/A') as outlet_name
+		 FROM transactions t 
+		 LEFT JOIN outlets o ON t.outlet_id = o.id
+		 %s ORDER BY t.created_at DESC LIMIT $%d OFFSET $%d`, where, argIdx, argIdx+1)
 	args = append(args, perPage, offset)
 
 	rows, err := r.pool.Query(ctx, dataSQL, args...)
@@ -177,10 +193,17 @@ func (r *transactionRepo) FindAll(ctx context.Context, filter repository.Transac
 		if err := rows.Scan(
 			&txn.ID, &txn.ShiftID, &txn.OutletID, &txn.OrderID, &txn.CustomerName, &txn.Subtotal,
 			&txn.DiscountAmount, &txn.TaxAmount, &txn.TotalAmount, &txn.PaymentMethod, &txn.PaymentStatus,
-			&txn.PaidAt, &txn.CreatedAt, &txn.UpdatedAt,
+			&txn.PaidAt, &txn.CreatedAt, &txn.UpdatedAt, &txn.OutletName,
 		); err != nil {
 			return nil, 0, err
 		}
+		
+		// Load items for each transaction
+		items, err := r.loadItems(ctx, txn.ID)
+		if err == nil {
+			txn.Items = items
+		}
+
 		txns = append(txns, txn)
 	}
 	return txns, total, rows.Err()
@@ -247,4 +270,39 @@ func (r *transactionRepo) loadItems(ctx context.Context, txnID uuid.UUID) ([]dom
 		items = append(items, item)
 	}
 	return items, rows.Err()
+}
+
+func (r *transactionRepo) GetShiftSummary(ctx context.Context, shiftID uuid.UUID) (*domain.ShiftSummary, error) {
+	summary := &domain.ShiftSummary{ShiftID: shiftID}
+
+	// Calculate totals from paid transactions
+	err := r.pool.QueryRow(ctx, `
+		SELECT 
+			COALESCE(SUM(total_amount), 0) as total_sales,
+			COUNT(id) as total_transactions,
+			COALESCE(SUM(CASE WHEN payment_method = 'cash' THEN total_amount ELSE 0 END), 0) as cash_sales,
+			COALESCE(SUM(CASE WHEN payment_method = 'qris' THEN total_amount ELSE 0 END), 0) as qris_sales
+		FROM transactions 
+		WHERE shift_id = $1 AND payment_status = 'paid'
+	`, shiftID).Scan(
+		&summary.TotalSales,
+		&summary.TotalTransactions,
+		&summary.CashSales,
+		&summary.QRISSales,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	// Calculate voids
+	err = r.pool.QueryRow(ctx, `
+		SELECT COALESCE(SUM(total_amount), 0) 
+		FROM transactions 
+		WHERE shift_id = $1 AND payment_status = 'void'
+	`, shiftID).Scan(&summary.Voids)
+	if err != nil {
+		return nil, err
+	}
+
+	return summary, nil
 }

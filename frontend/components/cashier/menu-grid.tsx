@@ -101,10 +101,14 @@ export function MenuGrid({ selectedCategory, onCategoryChange, onAddToCart, menu
               )}
               onClick={() => item.isActive && onAddToCart(item)}
             >
-              <div className="aspect-square bg-muted rounded-lg mb-3 flex items-center justify-center">
-                <span className="text-4xl text-muted-foreground">
-                  {item.name.charAt(0)}
-                </span>
+              <div className="aspect-square bg-muted rounded-lg mb-3 flex items-center justify-center overflow-hidden">
+                {item.image ? (
+                  <img src={item.image} alt={item.name} className="h-full w-full object-cover" />
+                ) : (
+                  <span className="text-4xl text-muted-foreground">
+                    {item.name.charAt(0)}
+                  </span>
+                )}
               </div>
               <h3 className="font-medium text-sm line-clamp-2 mb-1">{item.name}</h3>
               <p className="text-primary font-semibold text-sm">
@@ -129,10 +133,14 @@ export function MenuGrid({ selectedCategory, onCategoryChange, onAddToCart, menu
               )}
               onClick={() => item.isActive && onAddToCart(item)}
             >
-              <div className="w-16 h-16 bg-muted rounded-lg flex items-center justify-center shrink-0">
-                <span className="text-2xl text-muted-foreground">
-                  {item.name.charAt(0)}
-                </span>
+              <div className="w-16 h-16 bg-muted rounded-lg flex items-center justify-center shrink-0 overflow-hidden">
+                {item.image ? (
+                  <img src={item.image} alt={item.name} className="h-full w-full object-cover" />
+                ) : (
+                  <span className="text-2xl text-muted-foreground">
+                    {item.name.charAt(0)}
+                  </span>
+                )}
               </div>
               <div className="flex-1 min-w-0">
                 <h3 className="font-medium truncate">{item.name}</h3>

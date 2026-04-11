@@ -5,33 +5,86 @@
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080'
 
-// ─── Token Management ────────────────────────────────────────
-let authToken: string | null = null
+import type { Transaction } from './types'
 
-export function setAuthToken(token: string) {
-  authToken = token
-  if (typeof window !== 'undefined') {
-    localStorage.setItem('auth_token', token)
+// ─── Multi-Session Auth Storage ──────────────────────────────
+// Supports concurrent owner + cashier sessions in the same browser.
+// Each role has its own token and user slots in localStorage.
+// The "active" role is set per-module (backoffice sets 'owner', cashier sets 'cashier').
+
+type UserRole = 'owner' | 'cashier'
+
+let currentModuleRole: UserRole | null = null
+
+// Called by each layout to declare which role context is active for API requests.
+export function setCurrentModuleRole(role: UserRole) {
+  currentModuleRole = role
+}
+
+export function getAuthSession(role: UserRole): { token: string; user: any } | null {
+  if (typeof window === 'undefined') return null
+  const token = localStorage.getItem(`auth_token_${role}`)
+  const raw = localStorage.getItem(`auth_user_${role}`)
+  if (!token || !raw) return null
+  try {
+    return { token, user: JSON.parse(raw) }
+  } catch {
+    return null
   }
 }
 
-export function getAuthToken(): string | null {
-  if (authToken) return authToken
+export function setAuthSession(role: UserRole, token: string, user: any) {
   if (typeof window !== 'undefined') {
-    authToken = localStorage.getItem('auth_token')
+    localStorage.setItem(`auth_token_${role}`, token)
+    localStorage.setItem(`auth_user_${role}`, JSON.stringify(user))
   }
-  return authToken
 }
 
-export function clearAuthToken() {
-  authToken = null
+export function clearAuthSession(role: UserRole) {
+  if (typeof window !== 'undefined') {
+    localStorage.removeItem(`auth_token_${role}`)
+    localStorage.removeItem(`auth_user_${role}`)
+  }
+  // Also clear legacy single-slot keys on explicit logout
   if (typeof window !== 'undefined') {
     localStorage.removeItem('auth_token')
     localStorage.removeItem('auth_user')
   }
 }
 
-// ─── Core Fetch Wrapper ──────────────────────────────────────
+// ─── Legacy compatibility wrappers ───────────────────────────
+// These read/write from the active module role so existing callers still work.
+
+export function setAuthToken(token: string) {
+  // Legacy: store in active role slot. During login we haven't set role yet, so
+  // this is called only from loginOAuth which now uses setAuthSession directly.
+  if (typeof window !== 'undefined') {
+    localStorage.setItem('auth_token', token)
+  }
+}
+
+export function getAuthToken(): string | null {
+  if (typeof window === 'undefined') return null
+  // Prefer role-keyed token if a module role is active
+  if (currentModuleRole) {
+    const token = localStorage.getItem(`auth_token_${currentModuleRole}`)
+    if (token) return token
+  }
+  // Fall back to legacy single-slot (for backward compat during migration)
+  return localStorage.getItem('auth_token')
+}
+
+export function clearAuthToken() {
+  if (typeof window !== 'undefined') {
+    localStorage.removeItem('auth_token')
+    localStorage.removeItem('auth_user')
+    // Also clear both role slots
+    clearAuthSession('owner')
+    clearAuthSession('cashier')
+  }
+}
+
+
 interface APIResponse<T> {
   success: boolean
   data?: T
@@ -90,27 +143,38 @@ export async function loginOAuth(email: string) {
     body: JSON.stringify({ provider: 'google', id_token: email }),
   })
   if (res.data) {
-    setAuthToken(res.data.token)
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('auth_user', JSON.stringify(res.data.user))
-    }
+    const role = res.data.user.role
+    // Store in role-keyed slot — preserves the other role's session
+    setAuthSession(role, res.data.token, res.data.user)
   }
   return res.data!
 }
 
-export async function logout() {
+export async function logout(role?: 'owner' | 'cashier') {
   try {
     await apiFetch('/api/v1/auth/logout', { method: 'POST' })
   } finally {
-    clearAuthToken()
+    if (role) {
+      // Only clear the session for the role that's logging out
+      clearAuthSession(role)
+    } else {
+      clearAuthToken() // Clear everything (legacy fallback)
+    }
   }
 }
 
+// getStoredUser: backward-compat, reads from currentModuleRole or falls back to legacy slot
 export function getStoredUser() {
   if (typeof window === 'undefined') return null
+  if (currentModuleRole) {
+    const session = getAuthSession(currentModuleRole)
+    if (session) return session.user
+  }
+  // Legacy fallback
   const raw = localStorage.getItem('auth_user')
   return raw ? JSON.parse(raw) : null
 }
+
 
 // ─── Cashier ──────────────────────────────────────────────────
 export async function getCashierMenu() {
@@ -135,6 +199,11 @@ export async function getCurrentShift() {
   return res.data
 }
 
+export async function getCurrentShiftSummary() {
+  const res = await apiFetch<any>('/api/v1/cashier/shifts/current/summary')
+  return res.data
+}
+
 export async function closeShift(shiftId: string, endingCash: number, note: string) {
   const res = await apiFetch<any>('/api/v1/cashier/shifts/close', {
     method: 'POST',
@@ -148,6 +217,10 @@ export async function createTransaction(payload: {
   outlet_id: string
   customer_name?: string
   payment_method: 'cash' | 'qris'
+  subtotal: number
+  tax_amount: number
+  discount_amount: number
+  total_amount: number
   items: {
     product_id: string
     product_name: string
@@ -173,7 +246,40 @@ export async function voidTransaction(id: string) {
 export async function getCashierTransactions(params?: Record<string, string>) {
   const query = params ? '?' + new URLSearchParams(params).toString() : ''
   const res = await apiFetch<any[]>(`/api/v1/cashier/transactions${query}`)
-  return { data: res.data!, meta: res.meta }
+  return { data: res.data!.map(mapTransaction), meta: res.meta }
+}
+
+export async function getTransaction(id: string) {
+  const res = await apiFetch<any>(`/api/v1/cashier/transactions/${id}`)
+  return mapTransaction(res.data!)
+}
+
+function mapTransaction(t: any): Transaction {
+  const dateObj = new Date(t.created_at || new Date())
+  return {
+    id: t.id,
+    orderId: t.order_id,
+    outletId: t.outlet_id,
+    outletName: t.outlet_name || "Unknown",
+    date: dateObj.toISOString().split("T")[0],
+    time: dateObj.toTimeString().split(" ")[0].slice(0, 5),
+    createdAt: dateObj.toISOString(),
+    cashierId: "Unknown", // Kasir ID would normally come from relation
+    cashierName: "Cashier", // To get real cashier name, backend should join users table, but keeping default for now or we use user session
+    customerName: t.customer_name || undefined,
+    items: (t.items || []).map((i: any) => ({
+      name: i.product_name,
+      modifiers: Array.isArray(i.modifiers) ? i.modifiers.map((m: any) => m.name).join(", ") : i.modifiers || "",
+      quantity: i.quantity,
+      price: i.unit_price
+    })),
+    subtotal: t.subtotal,
+    tax: t.tax_amount || 0,
+    discount: t.discount_amount || 0,
+    total: t.total_amount,
+    paymentMethod: t.payment_method,
+    status: t.payment_status,
+  }
 }
 
 // ─── Backoffice: Categories ────────────────────────────────────
@@ -204,9 +310,10 @@ export async function deleteCategory(id: string) {
 
 // ─── Backoffice: Products ──────────────────────────────────────
 export async function getProducts(params?: Record<string, string>) {
-  const query = params ? '?' + new URLSearchParams(params).toString() : ''
+  const finalParams = { per_page: '1000', ...params }
+  const query = '?' + new URLSearchParams(finalParams).toString()
   const res = await apiFetch<any[]>(`/api/v1/backoffice/products${query}`)
-  return { data: res.data!, meta: res.meta }
+  return { data: res.data || [], meta: res.meta }
 }
 
 export async function createProduct(product: any) {
@@ -295,6 +402,16 @@ export async function deleteEmployee(id: string) {
   await apiFetch(`/api/v1/backoffice/employees/${id}`, { method: 'DELETE' })
 }
 
+export async function getActivityLogs(params?: Record<string, any>) {
+  const query = new URLSearchParams()
+  if (params) {
+    Object.entries(params).forEach(([k, v]) => {
+      if (v && v !== 'all') query.append(k, String(v))
+    })
+  }
+  return apiFetch<any>(`/api/v1/backoffice/employees/activity?${query.toString()}`)
+}
+
 // ─── Backoffice: Outlets ───────────────────────────────────────
 export async function getOutlets() {
   const res = await apiFetch<any[]>('/api/v1/backoffice/outlets')
@@ -315,6 +432,10 @@ export async function updateOutlet(id: string, outlet: any) {
     body: JSON.stringify(outlet),
   })
   return res.data!
+}
+
+export async function deleteOutlet(id: string) {
+  await apiFetch(`/api/v1/backoffice/outlets/${id}`, { method: 'DELETE' })
 }
 
 export async function updateOutletStatus(id: string, status: 'active' | 'inactive') {
@@ -338,15 +459,86 @@ export async function updateSettings(settings: any) {
   return res.data!
 }
 
+// ─── Backoffice: Uploads ───────────────────────────────────────
+export async function uploadImage(file: File) {
+  const token = getAuthToken()
+  const formData = new FormData()
+  formData.append('image', file)
+
+  const response = await fetch(`${API_BASE}/api/v1/backoffice/upload`, {
+    method: 'POST',
+    headers: {
+      ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+    },
+    body: formData,
+  })
+
+  if (!response.ok) {
+    const errData = await response.json().catch(() => ({}))
+    throw new Error(errData.message || 'Failed to upload image')
+  }
+
+  const { data } = await response.json()
+  return data.url
+}
+
+// ─── Backoffice: Dashboard ────────────────────────────────────
+export async function getDashboardSummary(params?: Record<string, string>) {
+  const query = params ? '?' + new URLSearchParams(params).toString() : ''
+  const res = await apiFetch<any>(`/api/v1/backoffice/dashboard/summary${query}`)
+  return res.data
+}
+
 // ─── Backoffice: Reports ───────────────────────────────────────
 export async function getReportTransactions(params?: Record<string, string>) {
   const query = params ? '?' + new URLSearchParams(params).toString() : ''
   const res = await apiFetch<any[]>(`/api/v1/backoffice/reports/transactions${query}`)
-  return { data: res.data!, meta: res.meta }
+  return { data: (res.data ?? []).map(mapTransaction), meta: res.meta }
 }
 
 export async function getReportShifts(params?: Record<string, string>) {
   const query = params ? '?' + new URLSearchParams(params).toString() : ''
   const res = await apiFetch<any[]>(`/api/v1/backoffice/reports/shifts${query}`)
-  return { data: res.data!, meta: res.meta }
+  const mapped = (res.data ?? []).map((s: any) => ({
+    id: s.id,
+    cashierId: s.user_id,
+    cashierName: s.cashier_name || 'Unknown',
+    outletId: s.outlet_id,
+    outletName: s.outlet_name || 'Unknown',
+    startTime: s.started_at ? new Date(s.started_at).toLocaleString('id-ID') : '-',
+    endTime: s.closed_at ? new Date(s.closed_at).toLocaleString('id-ID') : null,
+    beginningCash: s.starting_cash ?? 0,
+    cashTransactions: 0,
+    cashAmount: 0,
+    qrisTransactions: 0,
+    qrisAmount: 0,
+    expectedCash: s.expected_cash ?? s.starting_cash ?? 0,
+    actualCash: s.ending_cash ?? null,
+    discrepancy: s.discrepancy ?? null,
+    notes: s.discrepancy_note || null,
+    status: s.status,
+  }))
+  return { data: mapped, meta: res.meta }
 }
+
+export async function getShiftSummary(shiftId: string) {
+  const res = await apiFetch<any>(`/api/v1/backoffice/reports/shifts/${shiftId}/summary`)
+  return res.data!
+}
+
+// ─── Public ───────────────────────────────────────────────────
+export async function getPublicReceipt(id: string) {
+  // This endpoint returns { success, transaction, settings, outlet } — NOT the standard { success, data } envelope
+  // So we must fetch raw without going through the standard apiFetch wrapper
+  const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080'
+  const res = await fetch(`${API_URL}/api/v1/public/receipts/${id}`, { cache: 'no-store' })
+  if (!res.ok) throw new Error('Receipt not found')
+  const json = await res.json()
+  if (!json.success) throw new Error(json.error?.message || 'Failed to load receipt')
+  return {
+    transaction: json.transaction,
+    settings: json.settings,
+    outlet: json.outlet,
+  }
+}
+

@@ -1,36 +1,44 @@
 package handler
 
 import (
+	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/smallthingscoffee/pos-backend/internal/domain"
+	cloudinary_infra "github.com/smallthingscoffee/pos-backend/internal/infrastructure/cloudinary"
 	"github.com/smallthingscoffee/pos-backend/internal/repository"
 	"github.com/smallthingscoffee/pos-backend/internal/usecase"
 )
 
 type BackofficeHandler struct {
-	productUC  *usecase.ProductUsecase
-	categoryUC *usecase.CategoryUsecase
-	modifierUC *usecase.ModifierUsecase
-	employeeUC *usecase.EmployeeUsecase
-	outletUC   *usecase.OutletUsecase
-	settingsUC *usecase.SettingsUsecase
-	txnUC      *usecase.TransactionUsecase
-	shiftUC    *usecase.ShiftUsecase
+	productUC    *usecase.ProductUsecase
+	categoryUC   *usecase.CategoryUsecase
+	modifierUC   *usecase.ModifierUsecase
+	employeeUC   *usecase.EmployeeUsecase
+	outletUC     *usecase.OutletUsecase
+	settingsUC   *usecase.SettingsUsecase
+	txnUC        *usecase.TransactionUsecase
+	shiftUC      *usecase.ShiftUsecase
+	dashboardUC  *usecase.DashboardUsecase
+	uploadSvc    *cloudinary_infra.CloudinaryService
 }
 
 func NewBackofficeHandler(
 	pu *usecase.ProductUsecase, cu *usecase.CategoryUsecase, mu *usecase.ModifierUsecase,
 	eu *usecase.EmployeeUsecase, ou *usecase.OutletUsecase, su *usecase.SettingsUsecase,
 	tu *usecase.TransactionUsecase, shu *usecase.ShiftUsecase,
+	du *usecase.DashboardUsecase,
+	uploadSvc *cloudinary_infra.CloudinaryService,
 ) *BackofficeHandler {
 	return &BackofficeHandler{
 		productUC: pu, categoryUC: cu, modifierUC: mu,
 		employeeUC: eu, outletUC: ou, settingsUC: su,
-		txnUC: tu, shiftUC: shu,
+		txnUC: tu, shiftUC: shu, dashboardUC: du, uploadSvc: uploadSvc,
 	}
 }
 
@@ -76,6 +84,10 @@ func (h *BackofficeHandler) UpdateCategory(c *gin.Context) {
 func (h *BackofficeHandler) DeleteCategory(c *gin.Context) {
 	id, _ := uuid.Parse(c.Param("id"))
 	if err := h.categoryUC.Delete(c.Request.Context(), id); err != nil {
+		if strings.Contains(err.Error(), "23503") || strings.Contains(err.Error(), "foreign key constraint") {
+			RespondError(c, http.StatusConflict, "CONFLICT_ERROR", "Kategori tidak bisa dihapus karena masih digunakan oleh produk. Silakan hapus atau ubah produk terkait terlebih dahulu.")
+			return
+		}
 		RespondError(c, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
 		return
 	}
@@ -152,6 +164,10 @@ func (h *BackofficeHandler) PatchProductStock(c *gin.Context) {
 func (h *BackofficeHandler) DeleteProduct(c *gin.Context) {
 	id, _ := uuid.Parse(c.Param("id"))
 	if err := h.productUC.Delete(c.Request.Context(), id); err != nil {
+		if strings.Contains(err.Error(), "23503") || strings.Contains(err.Error(), "foreign key constraint") {
+			RespondError(c, http.StatusConflict, "CONFLICT_ERROR", "Produk tidak bisa dihapus karena masih memiliki riwayat transaksi. Silakan nonaktifkan status produk ini jika tidak dijual lagi.")
+			return
+		}
 		RespondError(c, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
 		return
 	}
@@ -200,6 +216,10 @@ func (h *BackofficeHandler) UpdateModifier(c *gin.Context) {
 func (h *BackofficeHandler) DeleteModifier(c *gin.Context) {
 	id, _ := uuid.Parse(c.Param("id"))
 	if err := h.modifierUC.Delete(c.Request.Context(), id); err != nil {
+		if strings.Contains(err.Error(), "23503") || strings.Contains(err.Error(), "foreign key constraint") {
+			RespondError(c, http.StatusConflict, "CONFLICT_ERROR", "Modifier tidak bisa dihapus karena masih melekat pada salah satu produk. Silakan lepaskan modifier ini dari produk terkait terlebih dahulu.")
+			return
+		}
 		RespondError(c, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
 		return
 	}
@@ -264,10 +284,50 @@ func (h *BackofficeHandler) PatchEmployeeStatus(c *gin.Context) {
 func (h *BackofficeHandler) DeleteEmployee(c *gin.Context) {
 	id, _ := uuid.Parse(c.Param("id"))
 	if err := h.employeeUC.Delete(c.Request.Context(), id); err != nil {
+		if strings.Contains(err.Error(), "23503") || strings.Contains(err.Error(), "foreign key constraint") {
+			RespondError(c, http.StatusConflict, "CONFLICT_ERROR", "Karyawan ini tidak bisa dihapus karena telah terhubung dengan riwayat shift atau transaksi. Silakan nonaktifkan (ubah status) karyawan ini.")
+			return
+		}
 		RespondError(c, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
 		return
 	}
 	RespondSuccess(c, http.StatusOK, gin.H{"deleted": true})
+}
+
+func (h *BackofficeHandler) ListActivityLogs(c *gin.Context) {
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	perPage, _ := strconv.Atoi(c.DefaultQuery("per_page", "20"))
+	filter := repository.ActivityLogFilter{Page: page, PerPage: perPage}
+
+	if uid := c.Query("employee_id"); uid != "" && uid != "all" {
+		id, _ := uuid.Parse(uid)
+		filter.UserID = &id
+	}
+	if oid := c.Query("outlet_id"); oid != "" && oid != "all" {
+		id, _ := uuid.Parse(oid)
+		filter.OutletID = &id
+	}
+	if at := c.Query("activity_type"); at != "" && at != "all" {
+		t := domain.ActivityType(at)
+		filter.ActivityType = &t
+	}
+	if start := c.Query("start_date"); start != "" {
+		if t, err := time.Parse(time.RFC3339, start); err == nil {
+			filter.StartDate = &t
+		}
+	}
+	if end := c.Query("end_date"); end != "" {
+		if t, err := time.Parse(time.RFC3339, end); err == nil {
+			filter.EndDate = &t
+		}
+	}
+
+	logs, total, err := h.employeeUC.ListActivityLogs(c.Request.Context(), filter)
+	if err != nil {
+		RespondError(c, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
+		return
+	}
+	RespondPaginated(c, logs, page, perPage, total)
 }
 
 // ─── Outlets ──────────────────────────────────────────────
@@ -275,6 +335,7 @@ func (h *BackofficeHandler) DeleteEmployee(c *gin.Context) {
 func (h *BackofficeHandler) ListOutlets(c *gin.Context) {
 	outlets, err := h.outletUC.List(c.Request.Context())
 	if err != nil {
+		fmt.Println("CRITICAL ERROR IN LIST OUTLETS:", err)
 		RespondError(c, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
 		return
 	}
@@ -325,6 +386,54 @@ func (h *BackofficeHandler) PatchOutletStatus(c *gin.Context) {
 	RespondSuccess(c, http.StatusOK, gin.H{"updated": true})
 }
 
+func (h *BackofficeHandler) DeleteOutlet(c *gin.Context) {
+	id, _ := uuid.Parse(c.Param("id"))
+	if err := h.outletUC.Delete(c.Request.Context(), id); err != nil {
+		if strings.Contains(err.Error(), "23503") || strings.Contains(err.Error(), "foreign key constraint") {
+			RespondError(c, http.StatusConflict, "CONFLICT_ERROR", "Outlet tidak bisa dihapus karena masih ada data kasir, shift, atau transaksi yang terkait. Silakan nonaktifkan (ubah status) outlet ini.")
+			return
+		}
+		RespondError(c, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
+		return
+	}
+	RespondSuccess(c, http.StatusOK, gin.H{"deleted": true})
+}
+
+// ─── Dashboard ──────────────────────────────────────────────
+
+func (h *BackofficeHandler) GetDashboardSummary(c *gin.Context) {
+	filter := repository.DashboardFilter{}
+
+	if oid := c.Query("outlet_id"); oid != "" {
+		id, _ := uuid.Parse(oid)
+		filter.OutletID = &id
+	}
+	if s := c.Query("start_date"); s != "" {
+		if t, err := time.Parse(time.RFC3339, s); err == nil {
+			filter.DateFrom = t
+		}
+	}
+	if e := c.Query("end_date"); e != "" {
+		if t, err := time.Parse(time.RFC3339, e); err == nil {
+			filter.DateTo = t
+		}
+	}
+
+	// Default to today if no date range provided
+	if filter.DateFrom.IsZero() {
+		now := time.Now()
+		filter.DateFrom = time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+		filter.DateTo = time.Date(now.Year(), now.Month(), now.Day(), 23, 59, 59, 999999999, now.Location())
+	}
+
+	summary, err := h.dashboardUC.GetSummary(c.Request.Context(), filter)
+	if err != nil {
+		RespondError(c, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
+		return
+	}
+	RespondSuccess(c, http.StatusOK, summary)
+}
+
 // ─── Reports ──────────────────────────────────────────────
 
 func (h *BackofficeHandler) ListReportTransactions(c *gin.Context) {
@@ -339,6 +448,19 @@ func (h *BackofficeHandler) ListReportTransactions(c *gin.Context) {
 		method := domain.PaymentMethod(pm)
 		filter.PaymentMethod = &method
 	}
+	if search := c.Query("search"); search != "" {
+		filter.SearchQuery = &search
+	}
+	if s := c.Query("start_date"); s != "" {
+		if t, err := time.Parse(time.RFC3339, s); err == nil {
+			filter.DateFrom = &t
+		}
+	}
+	if e := c.Query("end_date"); e != "" {
+		if t, err := time.Parse(time.RFC3339, e); err == nil {
+			filter.DateTo = &t
+		}
+	}
 	txns, total, err := h.txnUC.ListTransactions(c.Request.Context(), filter)
 	if err != nil {
 		RespondError(c, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
@@ -350,17 +472,51 @@ func (h *BackofficeHandler) ListReportTransactions(c *gin.Context) {
 func (h *BackofficeHandler) ListReportShifts(c *gin.Context) {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	perPage, _ := strconv.Atoi(c.DefaultQuery("per_page", "20"))
+
 	var outletID *uuid.UUID
 	if oid := c.Query("outlet_id"); oid != "" {
 		id, _ := uuid.Parse(oid)
 		outletID = &id
 	}
-	shifts, total, err := h.shiftUC.ListShifts(c.Request.Context(), outletID, page, perPage)
+
+	var userID *uuid.UUID
+	if uid := c.Query("cashier_id"); uid != "" {
+		id, _ := uuid.Parse(uid)
+		userID = &id
+	}
+
+	var startDate, endDate *time.Time
+	if s := c.Query("start_date"); s != "" {
+		if t, err := time.Parse(time.RFC3339, s); err == nil {
+			startDate = &t
+		}
+	}
+	if e := c.Query("end_date"); e != "" {
+		if t, err := time.Parse(time.RFC3339, e); err == nil {
+			endDate = &t
+		}
+	}
+
+	shifts, total, err := h.shiftUC.ListShifts(c.Request.Context(), outletID, userID, startDate, endDate, page, perPage)
 	if err != nil {
 		RespondError(c, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
 		return
 	}
 	RespondPaginated(c, shifts, page, perPage, total)
+}
+
+func (h *BackofficeHandler) GetShiftSummaryForReport(c *gin.Context) {
+	id, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		RespondError(c, http.StatusBadRequest, "INVALID_ID", "Invalid shift ID")
+		return
+	}
+	summary, err := h.shiftUC.GetShiftSummaryByID(c.Request.Context(), id)
+	if err != nil {
+		RespondError(c, http.StatusNotFound, "NOT_FOUND", err.Error())
+		return
+	}
+	RespondSuccess(c, http.StatusOK, summary)
 }
 
 // ─── Settings ──────────────────────────────────────────────
@@ -385,6 +541,36 @@ func (h *BackofficeHandler) UpdateSettings(c *gin.Context) {
 		return
 	}
 	RespondSuccess(c, http.StatusOK, s)
+}
+
+// ─── Uploads ──────────────────────────────────────────────
+
+func (h *BackofficeHandler) UploadImage(c *gin.Context) {
+	fileHeader, err := c.FormFile("image")
+	if err != nil {
+		RespondError(c, http.StatusBadRequest, "BAD_REQUEST", "image file is required")
+		return
+	}
+
+	file, err := fileHeader.Open()
+	if err != nil {
+		RespondError(c, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to open image file")
+		return
+	}
+	defer file.Close()
+
+	if h.uploadSvc == nil {
+		RespondError(c, http.StatusInternalServerError, "INTERNAL_ERROR", "Cloudinary service is not configured")
+		return
+	}
+
+	url, err := h.uploadSvc.UploadImage(c.Request.Context(), file)
+	if err != nil {
+		RespondError(c, http.StatusInternalServerError, "UPLOAD_FAILED", err.Error())
+		return
+	}
+
+	RespondSuccess(c, http.StatusOK, gin.H{"url": url})
 }
 
 // ─── Route Registration ──────────────────────────────────────────────
@@ -417,18 +603,27 @@ func (h *BackofficeHandler) RegisterRoutes(rg *gin.RouterGroup) {
 	bo.PUT("/employees/:id", h.UpdateEmployee)
 	bo.PATCH("/employees/:id/status", h.PatchEmployeeStatus)
 	bo.DELETE("/employees/:id", h.DeleteEmployee)
+	bo.GET("/employees/activity", h.ListActivityLogs)
 
 	// Outlets
 	bo.GET("/outlets", h.ListOutlets)
 	bo.POST("/outlets", h.CreateOutlet)
 	bo.PUT("/outlets/:id", h.UpdateOutlet)
 	bo.PATCH("/outlets/:id/status", h.PatchOutletStatus)
+	bo.DELETE("/outlets/:id", h.DeleteOutlet)
+
+	// Dashboard
+	bo.GET("/dashboard/summary", h.GetDashboardSummary)
 
 	// Reports
 	bo.GET("/reports/transactions", h.ListReportTransactions)
 	bo.GET("/reports/shifts", h.ListReportShifts)
+	bo.GET("/reports/shifts/:id/summary", h.GetShiftSummaryForReport)
 
 	// Settings
 	bo.GET("/settings", h.GetSettings)
 	bo.PUT("/settings", h.UpdateSettings)
+
+	// Uploads
+	bo.POST("/upload", h.UploadImage)
 }

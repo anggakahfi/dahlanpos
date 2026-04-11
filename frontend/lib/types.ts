@@ -94,11 +94,14 @@ export interface Transaction {
   outletName: string
   date: string
   time: string
+  createdAt: string
   cashierId: string
   cashierName: string
+  customerName?: string
   items: TransactionItem[]
   subtotal: number
   tax: number
+  discount: number
   total: number
   paymentMethod: 'cash' | 'qris'
   status: 'paid' | 'void'
@@ -117,6 +120,19 @@ export interface Employee {
 }
 
 // ============= SHIFTS =============
+export interface Shift {
+  id: string
+  employeeId: string
+  outletId: string
+  startTime: string
+  endTime: string | null
+  startingCash: number
+  endingCash: number | null
+  totalSales: number
+  totalTransactions: number
+  status: string
+}
+
 export interface ShiftRecord {
   id: string
   cashierId: string

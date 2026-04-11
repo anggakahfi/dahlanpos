@@ -17,3 +17,4 @@ func (uc *OutletUsecase) GetByID(ctx context.Context, id uuid.UUID) (*domain.Out
 func (uc *OutletUsecase) Create(ctx context.Context, o *domain.Outlet) error                   { return uc.repo.Create(ctx, o) }
 func (uc *OutletUsecase) Update(ctx context.Context, o *domain.Outlet) error                   { return uc.repo.Update(ctx, o) }
 func (uc *OutletUsecase) UpdateStatus(ctx context.Context, id uuid.UUID, s domain.OutletStatus) error { return uc.repo.UpdateStatus(ctx, id, s) }
+func (uc *OutletUsecase) Delete(ctx context.Context, id uuid.UUID) error                       { return uc.repo.Delete(ctx, id) }

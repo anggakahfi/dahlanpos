@@ -3,6 +3,7 @@ package handler
 import (
 	"math"
 	"net/http"
+	"reflect"
 
 	"github.com/gin-gonic/gin"
 )
@@ -35,11 +36,24 @@ func RespondSuccess(c *gin.Context, status int, data interface{}) {
 }
 
 // RespondPaginated sends a successful paginated JSON response.
+// It ensures that nil slices are serialized as [] instead of null.
 func RespondPaginated(c *gin.Context, data interface{}, page, perPage int, total int64) {
 	totalPages := int(math.Ceil(float64(total) / float64(perPage)))
+
+	// Ensure nil slices become empty slices so JSON encodes as [] not null
+	safeData := data
+	if data == nil {
+		safeData = []interface{}{}
+	} else {
+		v := reflect.ValueOf(data)
+		if v.Kind() == reflect.Slice && v.IsNil() {
+			safeData = []interface{}{}
+		}
+	}
+
 	c.JSON(http.StatusOK, APIResponse{
 		Success: true,
-		Data:    data,
+		Data:    safeData,
 		Meta: &Meta{
 			Page:       page,
 			PerPage:    perPage,
