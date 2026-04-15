@@ -47,6 +47,7 @@ export default function TransactionsPage() {
   
   const [page, setPage] = useState(1)
   const [totalRecords, setTotalRecords] = useState(0)
+  const [totalRevenue, setTotalRevenue] = useState(0)
   const [isLoading, setIsLoading] = useState(false)
 
   // Debouncing for search
@@ -86,6 +87,7 @@ export default function TransactionsPage() {
       const res = await getReportTransactions(params)
       setTransactionList(res.data || [])
       setTotalRecords((res.meta as any)?.total ?? 0)
+      setTotalRevenue((res as any).totalRevenue ?? 0)
     } catch (err: any) {
       console.error("Failed to fetch transactions", err)
       setErrorMsg(err.message || "Gagal memuat data dari server. Token kadaluarsa atau koneksi terputus.")
@@ -99,9 +101,6 @@ export default function TransactionsPage() {
   }, [fetchTransactions])
 
   const totalPages = Math.ceil(totalRecords / 20)
-  const totalRevenue = transactionList
-    .filter((t) => t.status === "paid")
-    .reduce((sum, t) => sum + t.total, 0)
 
   return (
     <>

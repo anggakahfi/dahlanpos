@@ -246,7 +246,7 @@ export async function voidTransaction(id: string) {
 export async function getCashierTransactions(params?: Record<string, string>) {
   const query = params ? '?' + new URLSearchParams(params).toString() : ''
   const res = await apiFetch<any[]>(`/api/v1/cashier/transactions${query}`)
-  return { data: res.data!.map(mapTransaction), meta: res.meta }
+  return { data: (res.data ?? []).map(mapTransaction), meta: res.meta }
 }
 
 export async function getTransaction(id: string) {
@@ -269,7 +269,7 @@ function mapTransaction(t: any): Transaction {
     customerName: t.customer_name || undefined,
     items: (t.items || []).map((i: any) => ({
       name: i.product_name,
-      modifiers: Array.isArray(i.modifiers) ? i.modifiers.map((m: any) => m.name).join(", ") : i.modifiers || "",
+      modifiers: Array.isArray(i.modifiers) ? i.modifiers.map((m: any) => m.selected_option || m.name || '').filter(Boolean).join(", ") : "",
       quantity: i.quantity,
       price: i.unit_price
     })),
@@ -493,7 +493,7 @@ export async function getDashboardSummary(params?: Record<string, string>) {
 export async function getReportTransactions(params?: Record<string, string>) {
   const query = params ? '?' + new URLSearchParams(params).toString() : ''
   const res = await apiFetch<any[]>(`/api/v1/backoffice/reports/transactions${query}`)
-  return { data: (res.data ?? []).map(mapTransaction), meta: res.meta }
+  return { data: (res.data ?? []).map(mapTransaction), meta: res.meta, totalRevenue: (res.meta as any)?.total_revenue ?? 0 }
 }
 
 export async function getReportShifts(params?: Record<string, string>) {
@@ -507,11 +507,22 @@ export async function getReportShifts(params?: Record<string, string>) {
     outletName: s.outlet_name || 'Unknown',
     startTime: s.started_at ? new Date(s.started_at).toLocaleString('id-ID') : '-',
     endTime: s.closed_at ? new Date(s.closed_at).toLocaleString('id-ID') : null,
+    duration: (() => {
+      if (!s.started_at) return '-';
+      const start = new Date(s.started_at);
+      const end = s.closed_at ? new Date(s.closed_at) : new Date();
+      const diffMs = end.getTime() - start.getTime();
+      if (diffMs < 0) return '0h 0m';
+      const hours = Math.floor(diffMs / (1000 * 60 * 60));
+      const mins = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+      return `${hours}h ${mins}m`;
+    })(),
     beginningCash: s.starting_cash ?? 0,
-    cashTransactions: 0,
-    cashAmount: 0,
-    qrisTransactions: 0,
-    qrisAmount: 0,
+    // BUG-13 FIX: Use backend data if available instead of hardcoding 0
+    cashTransactions: s.cash_transactions ?? 0,
+    cashAmount: s.cash_sales ?? s.cash_amount ?? 0,
+    qrisTransactions: s.qris_transactions ?? 0,
+    qrisAmount: s.qris_sales ?? s.qris_amount ?? 0,
     expectedCash: s.expected_cash ?? s.starting_cash ?? 0,
     actualCash: s.ending_cash ?? null,
     discrepancy: s.discrepancy ?? null,

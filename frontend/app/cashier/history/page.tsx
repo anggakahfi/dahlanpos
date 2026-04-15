@@ -27,24 +27,60 @@ export default function HistoryPage() {
 
   useEffect(() => {
     setIsMounted(true)
-    getCurrentShift()
-      .then((shift) => {
-        if (!shift || !shift.id) {
+    
+    const loadData = async () => {
+      try {
+        const shift = await getCurrentShift().catch(() => null)
+        
+        if (shift && shift.id) {
+          setHasActiveShift(true)
+          // Show transactions for current active shift
+          const res = await getCashierTransactions({ shift_id: shift.id })
+          if (res) setTransactionList(res.data || [])
+        } else {
           setHasActiveShift(false)
-          return
+          // No active shift — still show recent transactions (backend filters by outlet_id)
+          const res = await getCashierTransactions()
+          if (res) setTransactionList(res.data || [])
         }
-        setHasActiveShift(true)
-        return getCashierTransactions({ shift_id: shift.id })
-      })
-      .then((res) => {
-        if (res) {
-          setTransactionList(res.data || [])
-        }
-      })
-      .catch((err) => {
+      } catch (err) {
         console.error("Failed to fetch shift history:", err)
-      })
+      }
+    }
+    
+    loadData()
+    
+    // Auto-refresh every 10 seconds to bypass Next.js client router cache
+    const intervalId = setInterval(loadData, 10000)
+    
+    // Auto-refresh when window regains focus
+    window.addEventListener('focus', loadData)
+    
+    return () => {
+      clearInterval(intervalId)
+      window.removeEventListener('focus', loadData)
+    }
   }, [])
+
+  const handleManualRefresh = () => {
+    const loadData = async () => {
+      try {
+        const shift = await getCurrentShift().catch(() => null)
+        if (shift && shift.id) {
+          setHasActiveShift(true)
+          const res = await getCashierTransactions({ shift_id: shift.id })
+          if (res) setTransactionList(res.data || [])
+        } else {
+          setHasActiveShift(false)
+          const res = await getCashierTransactions()
+          if (res) setTransactionList(res.data || [])
+        }
+      } catch (err) {
+        console.error("Failed to fetch shift history:", err)
+      }
+    }
+    loadData()
+  }
 
   if (!isMounted) return null
 
@@ -108,14 +144,19 @@ export default function HistoryPage() {
               : `${filteredTransactions.length} transaksi pada shift ini`}
           </p>
         </div>
-        <div className="relative w-64">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Cari no. struk..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-9"
-          />
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="icon" onClick={handleManualRefresh} title="Refresh Data">
+            <RotateCcw className="h-4 w-4" />
+          </Button>
+          <div className="relative w-64">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Cari no. struk..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-9"
+            />
+          </div>
         </div>
       </div>
 

@@ -169,6 +169,7 @@ export default function ShiftsPage() {
                   <TableHead>Cashier</TableHead>
                   <TableHead>Start</TableHead>
                   <TableHead>End</TableHead>
+                  <TableHead>Duration</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead className="text-right">Expected Cash</TableHead>
                   <TableHead className="text-right">Actual Cash</TableHead>
@@ -179,19 +180,19 @@ export default function ShiftsPage() {
               <TableBody>
                 {isLoading ? (
                   <TableRow>
-                    <TableCell colSpan={10} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={11} className="text-center py-8 text-muted-foreground">
                       Loading...
                     </TableCell>
                   </TableRow>
                 ) : errorMsg ? (
                   <TableRow>
-                    <TableCell colSpan={10} className="text-center py-8 text-red-500 font-medium">
+                    <TableCell colSpan={11} className="text-center py-8 text-red-500 font-medium">
                       {errorMsg}
                     </TableCell>
                   </TableRow>
                 ) : shiftList.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={10} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={11} className="text-center py-8 text-muted-foreground">
                       No shifts found.
                     </TableCell>
                   </TableRow>
@@ -205,6 +206,7 @@ export default function ShiftsPage() {
                       <TableCell>{shift.cashierName}</TableCell>
                       <TableCell>{shift.startTime}</TableCell>
                       <TableCell>{shift.endTime || "-"}</TableCell>
+                      <TableCell>{shift.duration}</TableCell>
                       <TableCell>
                         <Badge variant={(shift as any).status === "open" ? "default" : "secondary"}>
                           {(shift as any).status === "open" ? "Open" : "Closed"}
@@ -318,7 +320,7 @@ export default function ShiftsPage() {
                       <CardContent className="p-4">
                         <p className="text-muted-foreground">Cash Transactions</p>
                         <p className="text-xl font-bold">
-                          {shiftSummary ? (shiftSummary.cash_sales > 0 ? "≥1" : "0") : "-"}
+                          {shiftSummary ? (shiftSummary.cash_transactions ?? 0) : "-"}
                         </p>
                         <p className="text-sm text-muted-foreground">
                           Rp {(shiftSummary?.cash_sales ?? 0).toLocaleString()}
@@ -329,7 +331,7 @@ export default function ShiftsPage() {
                       <CardContent className="p-4">
                         <p className="text-muted-foreground">QRIS Transactions</p>
                         <p className="text-xl font-bold">
-                          {shiftSummary ? (shiftSummary.qris_sales > 0 ? "≥1" : "0") : "-"}
+                          {shiftSummary ? (shiftSummary.qris_transactions ?? 0) : "-"}
                         </p>
                         <p className="text-sm text-muted-foreground">
                           Rp {(shiftSummary?.qris_sales ?? 0).toLocaleString()}

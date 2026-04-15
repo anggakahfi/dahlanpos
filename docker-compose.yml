@@ -8,6 +8,7 @@ services:
       POSTGRES_USER: root
       POSTGRES_PASSWORD: password123
       POSTGRES_DB: smallthings_db
+      TZ: Asia/Jakarta
     ports:
       - "5433:5432"
     volumes:
@@ -26,6 +27,7 @@ services:
       - CORS_ORIGIN=http://localhost:3000
       - PORT=8080
       - GOOGLE_CLIENT_ID=112899621345-lfles6vamavj2ouc3b6todsidq6jgivn.apps.googleusercontent.com
+      - TZ=Asia/Jakarta
     depends_on:
       - db
     restart: unless-stopped
@@ -38,6 +40,7 @@ services:
       - "3000:3000"
     environment:
       - NEXT_PUBLIC_API_URL=http://backend:8080
+      - TZ=Asia/Jakarta
     depends_on:
       - backend
 

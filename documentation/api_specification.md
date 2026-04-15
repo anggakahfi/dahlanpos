@@ -22,8 +22,9 @@
 10. [Backoffice — Employees](#10-backoffice--employees)
 11. [Backoffice — Outlets](#11-backoffice--outlets)
 12. [Backoffice — Reports](#12-backoffice--reports)
-13. [Backoffice — Settings](#13-backoffice--settings)
-14. [Error Handling & Pagination](#14-error-handling--pagination)
+13. [Backoffice — Settings & Uploads](#13-backoffice--settings--uploads)
+14. [Public — Receipts](#14-public--receipts)
+15. [Error Handling & Pagination](#15-error-handling--pagination)
 
 ---
 
@@ -224,6 +225,9 @@ Returns active shift summary (total sales, cash expected). If none, returns `nul
 { "shift_id": "shift_uuid", "ending_cash": 1695000, "discrepancy_note": "" }
 ```
 
+### `GET /cashier/shifts/current/summary`
+**Purpose:** Returns a real-time summary of the active shift (sales breakdown by payment method) before closing.
+
 ---
 
 ## 6. Cashier — Transaction History
@@ -237,12 +241,12 @@ Lists recent transactions locally for the cashier. Includes subtotal, total, and
 
 ---
 
-## 7. Backoffice — Dashboard
+## 7. Backoffice — Dashboard Summary
 
-### `GET /backoffice/dashboard`
+### `GET /backoffice/dashboard/summary`
 
 **Purpose:** Returns aggregated metrics. Owner can filter by `outlet_id`.
-**Query Parameters:** `outlet_id` (default: all), `period` (today, this_week, this_month).
+**Query Parameters:** `outlet_id` (default: all), `start_date`, `end_date` (ISO format).
 
 Returns revenue, comparative changes, payment breakdown (Cash vs QRIS), top selling items, and out of stock alerts.
 
@@ -299,6 +303,10 @@ Quick stock override.
 ### `PUT /backoffice/employees/:id`
 ### `PATCH /backoffice/employees/:id/status`
 Toggle `active`/`inactive` to revoke access instantly.
+
+### `GET /backoffice/employees/activity`
+**Purpose:** Retrieves audit logs for employee actions.
+**Query Parameters:** `employee_id`, `outlet_id`, `activity_type`, `start_date`, `end_date`, `page`, `per_page`.
 ### `DELETE /backoffice/employees/:id`
 
 ---
@@ -321,9 +329,12 @@ Aggregated transactions list with filters (date range, outlet, payment method) f
 ### `GET /backoffice/reports/shifts`
 History of all past shifts to monitor discrepancy and cash flow matching.
 
+### `GET /backoffice/reports/shifts/:id/summary`
+**Purpose:** Returns the detailed sales breakdown and discrepancy report for a specific past shift.
+
 ---
 
-## 13. Backoffice — Settings
+## 13. Backoffice — Settings & Uploads
 
 ### `GET /backoffice/settings`
 
@@ -349,9 +360,31 @@ History of all past shifts to monitor discrepancy and cash flow matching.
 ### `PUT /backoffice/settings`
 Full configuration update by the Owner.
 
+### `POST /backoffice/upload`
+**Purpose:** Uploads an image to Cloudinary and returns the URL.
+**Request:** Multipart Form Data (`image` field).
+**Response:** `{"success": true, "data": {"url": "..."}}`.
+
 ---
 
-## 14. Error Handling & Pagination
+## 14. Public — Receipts
+
+### `GET /public/receipts/:id`
+**Purpose:** Publicly accessible endpoint to view a transaction receipt. Used for customer-facing QR codes. Returns a combined payload of transaction data, receipt settings, and outlet information.
+
+**Response `200 OK`:**
+```json
+{
+  "success": true,
+  "transaction": { ... },
+  "settings": { ... },
+  "outlet": { ... }
+}
+```
+
+---
+
+## 15. Error Handling & Pagination
 
 ### Standard Error Codes
 

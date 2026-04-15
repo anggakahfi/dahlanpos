@@ -141,6 +141,7 @@ export interface ShiftRecord {
   outletName: string
   startTime: string
   endTime: string | null
+  duration: string
   beginningCash: number
   cashTransactions: number
   cashAmount: number

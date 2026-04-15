@@ -146,9 +146,14 @@ export default function ShiftPage() {
               }
             </p>
           </div>
-          <Button variant="destructive" onClick={() => setShowCloseDialog(true)}>
-            Tutup Shift
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="icon" onClick={() => refetch()} title="Refresh Data" className="h-10 w-10">
+              <RefreshCw className="h-4 w-4" />
+            </Button>
+            <Button variant="destructive" onClick={() => setShowCloseDialog(true)}>
+              Tutup Shift
+            </Button>
+          </div>
         </div>
 
         {/* Error Banner (Bug 1 fix) */}
