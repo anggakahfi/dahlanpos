@@ -46,6 +46,11 @@ func (uc *ProductUsecase) UpdateStock(ctx context.Context, id uuid.UUID, stock i
 	return uc.productRepo.UpdateStock(ctx, id, stock)
 }
 
+// SetAbsoluteStock sets the product stock to an exact value (for backoffice use).
+func (uc *ProductUsecase) SetAbsoluteStock(ctx context.Context, id uuid.UUID, stock int) error {
+	return uc.productRepo.SetAbsoluteStock(ctx, id, stock)
+}
+
 func (uc *ProductUsecase) Delete(ctx context.Context, id uuid.UUID) error {
 	return uc.productRepo.Delete(ctx, id)
 }

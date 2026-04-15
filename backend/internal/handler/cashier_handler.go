@@ -36,7 +36,7 @@ func (h *CashierHandler) GetMenu(c *gin.Context) {
 func (h *CashierHandler) OpenShift(c *gin.Context) {
 	var req struct {
 		OutletID     uuid.UUID `json:"outlet_id" binding:"required"`
-		StartingCash float64   `json:"starting_cash" binding:"required"`
+		StartingCash float64   `json:"starting_cash" binding:"min=0"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		RespondError(c, http.StatusBadRequest, "VALIDATION_ERROR", err.Error())
@@ -86,7 +86,7 @@ func (h *CashierHandler) GetCurrentShiftSummary(c *gin.Context) {
 func (h *CashierHandler) CloseShift(c *gin.Context) {
 	var req struct {
 		ShiftID         uuid.UUID `json:"shift_id" binding:"required"`
-		EndingCash      float64   `json:"ending_cash"`
+		EndingCash      float64   `json:"ending_cash" binding:"min=0"`
 		DiscrepancyNote string    `json:"discrepancy_note"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -94,7 +94,9 @@ func (h *CashierHandler) CloseShift(c *gin.Context) {
 		return
 	}
 
-	shift, err := h.shiftUC.CloseShift(c.Request.Context(), req.ShiftID, req.EndingCash, req.DiscrepancyNote)
+	// BUG-02 FIX: Pass authenticated user's ID to validate shift ownership
+	claims := middleware.GetUserClaims(c)
+	shift, err := h.shiftUC.CloseShift(c.Request.Context(), req.ShiftID, claims.UserID, req.EndingCash, req.DiscrepancyNote)
 	if err != nil {
 		RespondError(c, http.StatusUnprocessableEntity, "UNPROCESSABLE", err.Error())
 		return
@@ -170,7 +172,9 @@ func (h *CashierHandler) VoidTransaction(c *gin.Context) {
 		RespondError(c, http.StatusBadRequest, "VALIDATION_ERROR", "Invalid transaction ID")
 		return
 	}
-	if err := h.txnUC.VoidTransaction(c.Request.Context(), id); err != nil {
+	// BUG-03 FIX: Pass authenticated user's ID to validate transaction ownership
+	claims := middleware.GetUserClaims(c)
+	if err := h.txnUC.VoidTransaction(c.Request.Context(), id, claims.UserID); err != nil {
 		RespondError(c, http.StatusUnprocessableEntity, "UNPROCESSABLE", err.Error())
 		return
 	}
@@ -184,6 +188,12 @@ func (h *CashierHandler) ListTransactions(c *gin.Context) {
 
 	filter := repository.TransactionFilter{Page: page, PerPage: perPage}
 
+	// BUG-12 FIX: Auto-filter by outlet_id from JWT claims so cashiers only see their own outlet
+	claims := middleware.GetUserClaims(c)
+	if claims.OutletID != nil {
+		filter.OutletID = claims.OutletID
+	}
+
 	if shiftID := c.Query("shift_id"); shiftID != "" {
 		id, _ := uuid.Parse(shiftID)
 		filter.ShiftID = &id
@@ -193,7 +203,7 @@ func (h *CashierHandler) ListTransactions(c *gin.Context) {
 		filter.PaymentMethod = &method
 	}
 
-	txns, total, err := h.txnUC.ListTransactions(c.Request.Context(), filter)
+	txns, total, _, err := h.txnUC.ListTransactions(c.Request.Context(), filter)
 	if err != nil {
 		RespondError(c, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
 		return

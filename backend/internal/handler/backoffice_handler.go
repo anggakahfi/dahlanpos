@@ -67,7 +67,10 @@ func (h *BackofficeHandler) CreateCategory(c *gin.Context) {
 }
 
 func (h *BackofficeHandler) UpdateCategory(c *gin.Context) {
-	id, _ := uuid.Parse(c.Param("id"))
+	id, ok := parseUUIDParam(c, "id")
+	if !ok {
+		return
+	}
 	var cat domain.Category
 	if err := c.ShouldBindJSON(&cat); err != nil {
 		RespondError(c, http.StatusBadRequest, "VALIDATION_ERROR", err.Error())
@@ -82,7 +85,10 @@ func (h *BackofficeHandler) UpdateCategory(c *gin.Context) {
 }
 
 func (h *BackofficeHandler) DeleteCategory(c *gin.Context) {
-	id, _ := uuid.Parse(c.Param("id"))
+	id, ok := parseUUIDParam(c, "id")
+	if !ok {
+		return
+	}
 	if err := h.categoryUC.Delete(c.Request.Context(), id); err != nil {
 		if strings.Contains(err.Error(), "23503") || strings.Contains(err.Error(), "foreign key constraint") {
 			RespondError(c, http.StatusConflict, "CONFLICT_ERROR", "Kategori tidak bisa dihapus karena masih digunakan oleh produk. Silakan hapus atau ubah produk terkait terlebih dahulu.")
@@ -131,7 +137,10 @@ func (h *BackofficeHandler) CreateProduct(c *gin.Context) {
 }
 
 func (h *BackofficeHandler) UpdateProduct(c *gin.Context) {
-	id, _ := uuid.Parse(c.Param("id"))
+	id, ok := parseUUIDParam(c, "id")
+	if !ok {
+		return
+	}
 	var req createProductReq
 	if err := c.ShouldBindJSON(&req); err != nil {
 		RespondError(c, http.StatusBadRequest, "VALIDATION_ERROR", err.Error())
@@ -146,7 +155,10 @@ func (h *BackofficeHandler) UpdateProduct(c *gin.Context) {
 }
 
 func (h *BackofficeHandler) PatchProductStock(c *gin.Context) {
-	id, _ := uuid.Parse(c.Param("id"))
+	id, ok := parseUUIDParam(c, "id")
+	if !ok {
+		return
+	}
 	var req struct {
 		Stock int `json:"stock"`
 	}
@@ -154,7 +166,8 @@ func (h *BackofficeHandler) PatchProductStock(c *gin.Context) {
 		RespondError(c, http.StatusBadRequest, "VALIDATION_ERROR", err.Error())
 		return
 	}
-	if err := h.productUC.UpdateStock(c.Request.Context(), id, req.Stock); err != nil {
+	// BUG-06 FIX: Use SetAbsoluteStock to set exact stock value (not delta)
+	if err := h.productUC.SetAbsoluteStock(c.Request.Context(), id, req.Stock); err != nil {
 		RespondError(c, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
 		return
 	}
@@ -162,7 +175,10 @@ func (h *BackofficeHandler) PatchProductStock(c *gin.Context) {
 }
 
 func (h *BackofficeHandler) DeleteProduct(c *gin.Context) {
-	id, _ := uuid.Parse(c.Param("id"))
+	id, ok := parseUUIDParam(c, "id")
+	if !ok {
+		return
+	}
 	if err := h.productUC.Delete(c.Request.Context(), id); err != nil {
 		if strings.Contains(err.Error(), "23503") || strings.Contains(err.Error(), "foreign key constraint") {
 			RespondError(c, http.StatusConflict, "CONFLICT_ERROR", "Produk tidak bisa dihapus karena masih memiliki riwayat transaksi. Silakan nonaktifkan status produk ini jika tidak dijual lagi.")
@@ -199,7 +215,10 @@ func (h *BackofficeHandler) CreateModifier(c *gin.Context) {
 }
 
 func (h *BackofficeHandler) UpdateModifier(c *gin.Context) {
-	id, _ := uuid.Parse(c.Param("id"))
+	id, ok := parseUUIDParam(c, "id")
+	if !ok {
+		return
+	}
 	var g domain.ModifierGroup
 	if err := c.ShouldBindJSON(&g); err != nil {
 		RespondError(c, http.StatusBadRequest, "VALIDATION_ERROR", err.Error())
@@ -214,7 +233,10 @@ func (h *BackofficeHandler) UpdateModifier(c *gin.Context) {
 }
 
 func (h *BackofficeHandler) DeleteModifier(c *gin.Context) {
-	id, _ := uuid.Parse(c.Param("id"))
+	id, ok := parseUUIDParam(c, "id")
+	if !ok {
+		return
+	}
 	if err := h.modifierUC.Delete(c.Request.Context(), id); err != nil {
 		if strings.Contains(err.Error(), "23503") || strings.Contains(err.Error(), "foreign key constraint") {
 			RespondError(c, http.StatusConflict, "CONFLICT_ERROR", "Modifier tidak bisa dihapus karena masih melekat pada salah satu produk. Silakan lepaskan modifier ini dari produk terkait terlebih dahulu.")
@@ -251,7 +273,10 @@ func (h *BackofficeHandler) CreateEmployee(c *gin.Context) {
 }
 
 func (h *BackofficeHandler) UpdateEmployee(c *gin.Context) {
-	id, _ := uuid.Parse(c.Param("id"))
+	id, ok := parseUUIDParam(c, "id")
+	if !ok {
+		return
+	}
 	var u domain.User
 	if err := c.ShouldBindJSON(&u); err != nil {
 		RespondError(c, http.StatusBadRequest, "VALIDATION_ERROR", err.Error())
@@ -266,7 +291,10 @@ func (h *BackofficeHandler) UpdateEmployee(c *gin.Context) {
 }
 
 func (h *BackofficeHandler) PatchEmployeeStatus(c *gin.Context) {
-	id, _ := uuid.Parse(c.Param("id"))
+	id, ok := parseUUIDParam(c, "id")
+	if !ok {
+		return
+	}
 	var req struct {
 		Status domain.UserStatus `json:"status" binding:"required"`
 	}
@@ -282,7 +310,10 @@ func (h *BackofficeHandler) PatchEmployeeStatus(c *gin.Context) {
 }
 
 func (h *BackofficeHandler) DeleteEmployee(c *gin.Context) {
-	id, _ := uuid.Parse(c.Param("id"))
+	id, ok := parseUUIDParam(c, "id")
+	if !ok {
+		return
+	}
 	if err := h.employeeUC.Delete(c.Request.Context(), id); err != nil {
 		if strings.Contains(err.Error(), "23503") || strings.Contains(err.Error(), "foreign key constraint") {
 			RespondError(c, http.StatusConflict, "CONFLICT_ERROR", "Karyawan ini tidak bisa dihapus karena telah terhubung dengan riwayat shift atau transaksi. Silakan nonaktifkan (ubah status) karyawan ini.")
@@ -311,14 +342,17 @@ func (h *BackofficeHandler) ListActivityLogs(c *gin.Context) {
 		t := domain.ActivityType(at)
 		filter.ActivityType = &t
 	}
+	loc, _ := time.LoadLocation("Asia/Jakarta")
 	if start := c.Query("start_date"); start != "" {
 		if t, err := time.Parse(time.RFC3339, start); err == nil {
-			filter.StartDate = &t
+			tLoc := time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, loc)
+			filter.StartDate = &tLoc
 		}
 	}
 	if end := c.Query("end_date"); end != "" {
 		if t, err := time.Parse(time.RFC3339, end); err == nil {
-			filter.EndDate = &t
+			tLoc := time.Date(t.Year(), t.Month(), t.Day(), 23, 59, 59, 999999999, loc)
+			filter.EndDate = &tLoc
 		}
 	}
 
@@ -356,7 +390,10 @@ func (h *BackofficeHandler) CreateOutlet(c *gin.Context) {
 }
 
 func (h *BackofficeHandler) UpdateOutlet(c *gin.Context) {
-	id, _ := uuid.Parse(c.Param("id"))
+	id, ok := parseUUIDParam(c, "id")
+	if !ok {
+		return
+	}
 	var o domain.Outlet
 	if err := c.ShouldBindJSON(&o); err != nil {
 		RespondError(c, http.StatusBadRequest, "VALIDATION_ERROR", err.Error())
@@ -371,7 +408,10 @@ func (h *BackofficeHandler) UpdateOutlet(c *gin.Context) {
 }
 
 func (h *BackofficeHandler) PatchOutletStatus(c *gin.Context) {
-	id, _ := uuid.Parse(c.Param("id"))
+	id, ok := parseUUIDParam(c, "id")
+	if !ok {
+		return
+	}
 	var req struct {
 		Status domain.OutletStatus `json:"status" binding:"required"`
 	}
@@ -387,7 +427,10 @@ func (h *BackofficeHandler) PatchOutletStatus(c *gin.Context) {
 }
 
 func (h *BackofficeHandler) DeleteOutlet(c *gin.Context) {
-	id, _ := uuid.Parse(c.Param("id"))
+	id, ok := parseUUIDParam(c, "id")
+	if !ok {
+		return
+	}
 	if err := h.outletUC.Delete(c.Request.Context(), id); err != nil {
 		if strings.Contains(err.Error(), "23503") || strings.Contains(err.Error(), "foreign key constraint") {
 			RespondError(c, http.StatusConflict, "CONFLICT_ERROR", "Outlet tidak bisa dihapus karena masih ada data kasir, shift, atau transaksi yang terkait. Silakan nonaktifkan (ubah status) outlet ini.")
@@ -451,22 +494,35 @@ func (h *BackofficeHandler) ListReportTransactions(c *gin.Context) {
 	if search := c.Query("search"); search != "" {
 		filter.SearchQuery = &search
 	}
+	loc, _ := time.LoadLocation("Asia/Jakarta")
 	if s := c.Query("start_date"); s != "" {
 		if t, err := time.Parse(time.RFC3339, s); err == nil {
-			filter.DateFrom = &t
+			tLoc := time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, loc)
+			filter.DateFrom = &tLoc
 		}
 	}
 	if e := c.Query("end_date"); e != "" {
 		if t, err := time.Parse(time.RFC3339, e); err == nil {
-			filter.DateTo = &t
+			tLoc := time.Date(t.Year(), t.Month(), t.Day(), 23, 59, 59, 999999999, loc)
+			filter.DateTo = &tLoc
 		}
 	}
-	txns, total, err := h.txnUC.ListTransactions(c.Request.Context(), filter)
+	txns, total, totalRev, err := h.txnUC.ListTransactions(c.Request.Context(), filter)
 	if err != nil {
 		RespondError(c, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
 		return
 	}
-	RespondPaginated(c, txns, page, perPage, total)
+	
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"data":    txns,
+		"meta": gin.H{
+			"page":          page,
+			"per_page":      perPage,
+			"total":         total,
+			"total_revenue": totalRev,
+		},
+	})
 }
 
 func (h *BackofficeHandler) ListReportShifts(c *gin.Context) {
@@ -486,14 +542,17 @@ func (h *BackofficeHandler) ListReportShifts(c *gin.Context) {
 	}
 
 	var startDate, endDate *time.Time
+	loc, _ := time.LoadLocation("Asia/Jakarta")
 	if s := c.Query("start_date"); s != "" {
 		if t, err := time.Parse(time.RFC3339, s); err == nil {
-			startDate = &t
+			tLoc := time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, loc)
+			startDate = &tLoc
 		}
 	}
 	if e := c.Query("end_date"); e != "" {
 		if t, err := time.Parse(time.RFC3339, e); err == nil {
-			endDate = &t
+			tLoc := time.Date(t.Year(), t.Month(), t.Day(), 23, 59, 59, 999999999, loc)
+			endDate = &tLoc
 		}
 	}
 

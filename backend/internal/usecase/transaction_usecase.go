@@ -2,6 +2,7 @@ package usecase
 
 import (
 	"context"
+	"errors"
 
 	"github.com/google/uuid"
 	"github.com/smallthingscoffee/pos-backend/internal/domain"
@@ -13,14 +14,24 @@ type TransactionUsecase struct {
 	txnRepo     repository.TransactionRepository
 	logRepo     repository.ActivityLogRepository
 	productRepo repository.ProductRepository
+	shiftRepo   repository.ShiftRepository
 }
 
-func NewTransactionUsecase(tr repository.TransactionRepository, lr repository.ActivityLogRepository, pr repository.ProductRepository) *TransactionUsecase {
-	return &TransactionUsecase{txnRepo: tr, logRepo: lr, productRepo: pr}
+func NewTransactionUsecase(tr repository.TransactionRepository, lr repository.ActivityLogRepository, pr repository.ProductRepository, sr repository.ShiftRepository) *TransactionUsecase {
+	return &TransactionUsecase{txnRepo: tr, logRepo: lr, productRepo: pr, shiftRepo: sr}
 }
 
 // CreateTransaction processes a new sale with stock deduction.
 func (uc *TransactionUsecase) CreateTransaction(ctx context.Context, req domain.CreateTransactionRequest, userID uuid.UUID) (*domain.Transaction, error) {
+	// BUG-01 FIX: Validate that the shift is still open before creating transaction
+	shift, err := uc.shiftRepo.FindByID(ctx, req.ShiftID)
+	if err != nil {
+		return nil, errors.New("shift tidak ditemukan")
+	}
+	if shift.Status != domain.ShiftOpen {
+		return nil, errors.New("shift sudah ditutup, tidak bisa membuat transaksi baru")
+	}
+
 	// Calculate subtotal
 	var subtotal float64
 	items := make([]domain.TransactionItem, len(req.Items))
@@ -64,10 +75,9 @@ func (uc *TransactionUsecase) CreateTransaction(ctx context.Context, req domain.
 		return nil, err
 	}
 
-	// 🔽 Deduct stock for each item
-	for _, item := range req.Items {
-		_ = uc.productRepo.UpdateStock(ctx, item.ProductID, -item.Quantity)
-	}
+	// BUG-05 FIX: Stock deduction is already handled inside txnRepo.Create() within the
+	// database transaction. The duplicate deduction here has been REMOVED to prevent
+	// stock being deducted twice per transaction.
 
 	_ = uc.logRepo.Create(ctx, &domain.ActivityLog{
 		UserID: userID, OutletID: &req.OutletID,
@@ -79,12 +89,42 @@ func (uc *TransactionUsecase) CreateTransaction(ctx context.Context, req domain.
 }
 
 // VoidTransaction voids a transaction and restores stock.
-func (uc *TransactionUsecase) VoidTransaction(ctx context.Context, id uuid.UUID) error {
-	return uc.txnRepo.Void(ctx, id)
+func (uc *TransactionUsecase) VoidTransaction(ctx context.Context, id uuid.UUID, userID uuid.UUID) error {
+	// BUG-03 FIX: Validate transaction exists and check ownership before voiding
+	txn, err := uc.txnRepo.FindByID(ctx, id)
+	if err != nil {
+		return errors.New("transaksi tidak ditemukan")
+	}
+
+	// Prevent double-void
+	if txn.PaymentStatus == domain.PaymentVoid {
+		return errors.New("transaksi sudah di-void sebelumnya")
+	}
+
+	// Verify the transaction belongs to a shift owned by this user
+	shift, err := uc.shiftRepo.FindByID(ctx, txn.ShiftID)
+	if err != nil {
+		return errors.New("shift transaksi tidak ditemukan")
+	}
+	if shift.UserID != userID {
+		return errors.New("anda tidak berhak men-void transaksi milik kasir lain")
+	}
+
+	if err := uc.txnRepo.Void(ctx, id); err != nil {
+		return err
+	}
+
+	_ = uc.logRepo.Create(ctx, &domain.ActivityLog{
+		UserID: userID, OutletID: &txn.OutletID,
+		ActivityType: domain.ActivityTransaction,
+		Details:      "Void Transaction " + txn.OrderID,
+	})
+
+	return nil
 }
 
-// ListTransactions returns a filtered, paginated list of transactions.
-func (uc *TransactionUsecase) ListTransactions(ctx context.Context, filter repository.TransactionFilter) ([]domain.Transaction, int64, error) {
+// ListTransactions returns a filtered, paginated list of transactions, and total revenue.
+func (uc *TransactionUsecase) ListTransactions(ctx context.Context, filter repository.TransactionFilter) ([]domain.Transaction, int64, float64, error) {
 	return uc.txnRepo.FindAll(ctx, filter)
 }
 

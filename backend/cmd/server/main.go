@@ -48,7 +48,7 @@ func main() {
 	authUC := usecase.NewAuthUsecase(userRepo, activityLogRepo, cfg.JWTSecret, cfg.GoogleClientID)
 	cashierUC := usecase.NewCashierUsecase(productRepo, categoryRepo, modifierRepo)
 	shiftUC := usecase.NewShiftUsecase(shiftRepo, txnRepo, activityLogRepo, outletRepo)
-	txnUC := usecase.NewTransactionUsecase(txnRepo, activityLogRepo, productRepo)
+	txnUC := usecase.NewTransactionUsecase(txnRepo, activityLogRepo, productRepo, shiftRepo)
 	productUC := usecase.NewProductUsecase(productRepo)
 	categoryUC := usecase.NewCategoryUsecase(categoryRepo)
 	modifierUC := usecase.NewModifierUsecase(modifierRepo)
@@ -66,7 +66,7 @@ func main() {
 	}
 
 	// ─── Handlers ───────────────────────────────────────────
-	authHandler := handler.NewAuthHandler(authUC)
+	authHandler := handler.NewAuthHandler(authUC, activityLogRepo)
 	cashierHandler := handler.NewCashierHandler(cashierUC, shiftUC, txnUC)
 	backofficeHandler := handler.NewBackofficeHandler(
 		productUC, categoryUC, modifierUC, employeeUC, outletUC, settingsUC, txnUC, shiftUC, dashboardUC, cloudinarySvc,
@@ -85,8 +85,8 @@ func main() {
 	// API v1
 	v1 := router.Group("/api/v1")
 
-	// Public routes (no auth)
-	authHandler.RegisterRoutes(v1)
+	// Public routes (no auth) — login only
+	authHandler.RegisterPublicRoutes(v1)
 	
 	publicGroup := v1.Group("/public")
 	publicHandler.RegisterRoutes(publicGroup)
@@ -94,6 +94,9 @@ func main() {
 	// Protected routes (require JWT)
 	protected := v1.Group("")
 	protected.Use(middleware.AuthMiddleware(cfg.JWTSecret))
+
+	// Protected auth routes (logout needs JWT claims)
+	authHandler.RegisterProtectedRoutes(protected)
 
 	// Cashier routes (any authenticated user)
 	cashierHandler.RegisterRoutes(protected)

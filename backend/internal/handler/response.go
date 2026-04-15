@@ -6,7 +6,19 @@ import (
 	"reflect"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 )
+
+// parseUUIDParam parses a UUID from a path parameter and sends a 400 error if invalid.
+// BUG-15 FIX: Returns false if the UUID is malformed, preventing operations with zero UUIDs.
+func parseUUIDParam(c *gin.Context, paramName string) (uuid.UUID, bool) {
+	id, err := uuid.Parse(c.Param(paramName))
+	if err != nil {
+		RespondError(c, http.StatusBadRequest, "VALIDATION_ERROR", "Invalid "+paramName+" format")
+		return uuid.Nil, false
+	}
+	return id, true
+}
 
 // APIResponse is the standardized JSON envelope for all API responses.
 type APIResponse struct {

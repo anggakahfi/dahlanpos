@@ -29,7 +29,10 @@ func (r *transactionRepo) Create(ctx context.Context, txn *domain.Transaction) e
 	defer dbTx.Rollback(ctx)
 
 	// Generate order ID: ORD-YYYYMMDD-XXX
+	// BUG-16 FIX: Use advisory lock to prevent race condition on concurrent order creation
 	var seq int
+	// Advisory lock scoped by outlet to avoid cross-outlet contention
+	_, _ = dbTx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtext($1::text))`, txn.OutletID)
 	err = dbTx.QueryRow(ctx,
 		`SELECT COUNT(*) + 1 FROM transactions WHERE DATE(created_at) = CURRENT_DATE AND outlet_id = $1`,
 		txn.OutletID,
@@ -116,7 +119,7 @@ func (r *transactionRepo) FindByID(ctx context.Context, id uuid.UUID) (*domain.T
 	return &txn, nil
 }
 
-func (r *transactionRepo) FindAll(ctx context.Context, filter repository.TransactionFilter) ([]domain.Transaction, int64, error) {
+func (r *transactionRepo) FindAll(ctx context.Context, filter repository.TransactionFilter) ([]domain.Transaction, int64, float64, error) {
 	var conditions []string
 	var args []interface{}
 	argIdx := 1
@@ -158,8 +161,10 @@ func (r *transactionRepo) FindAll(ctx context.Context, filter repository.Transac
 	}
 
 	var total int64
-	if err := r.pool.QueryRow(ctx, fmt.Sprintf("SELECT COUNT(*) FROM transactions t %s", where), args...).Scan(&total); err != nil {
-		return nil, 0, err
+	var totalRevenue float64
+	queryStr := fmt.Sprintf(`SELECT COUNT(*), COALESCE(SUM(CASE WHEN t.payment_status = 'paid' THEN t.total_amount ELSE 0 END), 0) FROM transactions t %s`, where)
+	if err := r.pool.QueryRow(ctx, queryStr, args...).Scan(&total, &totalRevenue); err != nil {
+		return nil, 0, 0, err
 	}
 
 	page := filter.Page
@@ -183,7 +188,7 @@ func (r *transactionRepo) FindAll(ctx context.Context, filter repository.Transac
 
 	rows, err := r.pool.Query(ctx, dataSQL, args...)
 	if err != nil {
-		return nil, 0, err
+		return nil, 0, 0, err
 	}
 	defer rows.Close()
 
@@ -195,7 +200,7 @@ func (r *transactionRepo) FindAll(ctx context.Context, filter repository.Transac
 			&txn.DiscountAmount, &txn.TaxAmount, &txn.TotalAmount, &txn.PaymentMethod, &txn.PaymentStatus,
 			&txn.PaidAt, &txn.CreatedAt, &txn.UpdatedAt, &txn.OutletName,
 		); err != nil {
-			return nil, 0, err
+			return nil, 0, 0, err
 		}
 		
 		// Load items for each transaction
@@ -206,7 +211,7 @@ func (r *transactionRepo) FindAll(ctx context.Context, filter repository.Transac
 
 		txns = append(txns, txn)
 	}
-	return txns, total, rows.Err()
+	return txns, total, totalRevenue, rows.Err()
 }
 
 func (r *transactionRepo) Void(ctx context.Context, id uuid.UUID) error {
@@ -281,7 +286,9 @@ func (r *transactionRepo) GetShiftSummary(ctx context.Context, shiftID uuid.UUID
 			COALESCE(SUM(total_amount), 0) as total_sales,
 			COUNT(id) as total_transactions,
 			COALESCE(SUM(CASE WHEN payment_method = 'cash' THEN total_amount ELSE 0 END), 0) as cash_sales,
-			COALESCE(SUM(CASE WHEN payment_method = 'qris' THEN total_amount ELSE 0 END), 0) as qris_sales
+			COALESCE(SUM(CASE WHEN payment_method = 'qris' THEN total_amount ELSE 0 END), 0) as qris_sales,
+			COALESCE(SUM(CASE WHEN payment_method = 'cash' THEN 1 ELSE 0 END), 0) as cash_transactions,
+			COALESCE(SUM(CASE WHEN payment_method = 'qris' THEN 1 ELSE 0 END), 0) as qris_transactions
 		FROM transactions 
 		WHERE shift_id = $1 AND payment_status = 'paid'
 	`, shiftID).Scan(
@@ -289,6 +296,8 @@ func (r *transactionRepo) GetShiftSummary(ctx context.Context, shiftID uuid.UUID
 		&summary.TotalTransactions,
 		&summary.CashSales,
 		&summary.QRISSales,
+		&summary.CashTransactions,
+		&summary.QRISTransactions,
 	)
 	if err != nil {
 		return nil, err

@@ -57,12 +57,32 @@ func AuthMiddleware(jwtSecret string) gin.HandlerFunc {
 			return
 		}
 
-		userID, _ := uuid.Parse(claims["user_id"].(string))
-		role := domain.UserRole(claims["role"].(string))
+		// BUG-17 FIX: Use safe type assertions to prevent panic on tampered tokens
+		userIDStr, ok := claims["user_id"].(string)
+		if !ok {
+			respondError(c, http.StatusUnauthorized, "UNAUTHORIZED", "Invalid token: missing user_id")
+			c.Abort()
+			return
+		}
+		roleStr, ok := claims["role"].(string)
+		if !ok {
+			respondError(c, http.StatusUnauthorized, "UNAUTHORIZED", "Invalid token: missing role")
+			c.Abort()
+			return
+		}
+		emailStr, ok := claims["email"].(string)
+		if !ok {
+			respondError(c, http.StatusUnauthorized, "UNAUTHORIZED", "Invalid token: missing email")
+			c.Abort()
+			return
+		}
+
+		userID, _ := uuid.Parse(userIDStr)
+		role := domain.UserRole(roleStr)
 
 		uc := UserClaims{
 			UserID: userID,
-			Email:  claims["email"].(string),
+			Email:  emailStr,
 			Role:   role,
 		}
 

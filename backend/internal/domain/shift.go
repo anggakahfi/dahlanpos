@@ -39,8 +39,10 @@ type ShiftSummary struct {
 	TotalSales        float64   `json:"total_sales"`
 	TotalTransactions int       `json:"total_transactions"`
 	CashSales         float64   `json:"cash_sales"`
+	CashTransactions  int       `json:"cash_transactions"`
 	CardSales         float64   `json:"card_sales"`
 	QRISSales         float64   `json:"qris_sales"`
+	QRISTransactions  int       `json:"qris_transactions"`
 	StartingCash      float64   `json:"starting_cash"`
 	ExpectedCash      float64   `json:"expected_cash"`
 	Refunds           float64   `json:"refunds"` // Optional, currently not tracked in DB but we keep for struct parity

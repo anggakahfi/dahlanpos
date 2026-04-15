@@ -63,12 +63,20 @@ func (uc *ShiftUsecase) OpenShift(ctx context.Context, userID, outletID uuid.UUI
 			openHour := time.Date(now.Year(), now.Month(), now.Day(), openT.Hour(), openT.Minute(), 0, 0, loc)
 			var closeHour time.Time
 			
-			if closeT.Hour() < openT.Hour() {
-				// e.g. open 17:00, close 02:00
-				if now.Hour() <= closeT.Hour() {
+			// BUG-11 FIX: Use minute-level precision for cross-midnight comparison
+			// Convert to "minutes since midnight" for accurate comparison
+			nowMinutes := now.Hour()*60 + now.Minute()
+			closeMinutes := closeT.Hour()*60 + closeT.Minute()
+			openMinutes := openT.Hour()*60 + openT.Minute()
+
+			if closeMinutes < openMinutes {
+				// Cross-midnight: e.g. open 17:00, close 02:00
+				if nowMinutes <= closeMinutes {
+					// After midnight, before close (e.g. 01:30)
 					openHour = openHour.AddDate(0, 0, -1)
 					closeHour = time.Date(now.Year(), now.Month(), now.Day(), closeT.Hour(), closeT.Minute(), 0, 0, loc)
 				} else {
+					// Before midnight, after open (e.g. 23:00)
 					closeHour = time.Date(now.Year(), now.Month(), now.Day()+1, closeT.Hour(), closeT.Minute(), 0, 0, loc)
 				}
 			} else {
@@ -76,7 +84,16 @@ func (uc *ShiftUsecase) OpenShift(ctx context.Context, userID, outletID uuid.UUI
 			}
 
 			if now.Before(openHour) || now.After(closeHour) {
-				return nil, errors.New("outlet sedang tutup. Jam operasional: " + outlet.OpenTime[:5] + " - " + outlet.CloseTime[:5])
+				// BUG-14 FIX: Safe string slice — prevent panic on short strings
+				openDisplay := outlet.OpenTime
+				if len(openDisplay) >= 5 {
+					openDisplay = openDisplay[:5]
+				}
+				closeDisplay := outlet.CloseTime
+				if len(closeDisplay) >= 5 {
+					closeDisplay = closeDisplay[:5]
+				}
+				return nil, errors.New("outlet sedang tutup. Jam operasional: " + openDisplay + " - " + closeDisplay)
 			}
 		}
 	}
@@ -106,13 +123,18 @@ func (uc *ShiftUsecase) GetCurrentShift(ctx context.Context, userID uuid.UUID) (
 }
 
 // CloseShift closes the active shift and calculates cash discrepancy.
-func (uc *ShiftUsecase) CloseShift(ctx context.Context, shiftID uuid.UUID, endingCash float64, discrepancyNote string) (*domain.Shift, error) {
+func (uc *ShiftUsecase) CloseShift(ctx context.Context, shiftID uuid.UUID, userID uuid.UUID, endingCash float64, discrepancyNote string) (*domain.Shift, error) {
 	shift, err := uc.shiftRepo.FindByID(ctx, shiftID)
 	if err != nil {
 		return nil, errors.New("shift tidak ditemukan")
 	}
 	if shift.Status == domain.ShiftClosed {
 		return nil, errors.New("shift sudah ditutup")
+	}
+
+	// BUG-02 FIX: Validate that the shift belongs to the requesting user
+	if shift.UserID != userID {
+		return nil, errors.New("anda tidak berhak menutup shift milik karyawan lain")
 	}
 
 	// Calculate expected cash = starting_cash + total cash transactions in this shift

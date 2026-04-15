@@ -23,7 +23,8 @@ type ProductRepository interface {
 	FindActiveWithModifiers(ctx context.Context) ([]domain.Product, error) // For cashier menu
 	Create(ctx context.Context, product *domain.Product) error
 	Update(ctx context.Context, product *domain.Product) error
-	UpdateStock(ctx context.Context, id uuid.UUID, delta int) error // Atomic stock delta
+	UpdateStock(ctx context.Context, id uuid.UUID, delta int) error          // Atomic stock delta (used by transactions)
+	SetAbsoluteStock(ctx context.Context, id uuid.UUID, stock int) error     // Set absolute stock value (used by backoffice)
 	Delete(ctx context.Context, id uuid.UUID) error
 	SetModifierGroups(ctx context.Context, productID uuid.UUID, groupIDs []uuid.UUID) error
 	GetModifierGroupIDs(ctx context.Context, productID uuid.UUID) ([]uuid.UUID, error)

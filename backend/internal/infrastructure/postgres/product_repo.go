@@ -178,6 +178,18 @@ func (r *productRepo) UpdateStock(ctx context.Context, id uuid.UUID, delta int) 
 	return err
 }
 
+// SetAbsoluteStock sets the stock to an exact value (used by backoffice PATCH /products/:id/stock).
+func (r *productRepo) SetAbsoluteStock(ctx context.Context, id uuid.UUID, stock int) error {
+	if stock < 0 {
+		stock = 0
+	}
+	_, err := r.pool.Exec(ctx,
+		`UPDATE products SET stock = $1 WHERE id = $2`,
+		stock, id,
+	)
+	return err
+}
+
 func (r *productRepo) Delete(ctx context.Context, id uuid.UUID) error {
 	_, err := r.pool.Exec(ctx, `DELETE FROM products WHERE id=$1`, id)
 	return err

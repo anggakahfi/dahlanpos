@@ -24,7 +24,7 @@ type TransactionFilter struct {
 type TransactionRepository interface {
 	Create(ctx context.Context, txn *domain.Transaction) error
 	FindByID(ctx context.Context, id uuid.UUID) (*domain.Transaction, error)
-	FindAll(ctx context.Context, filter TransactionFilter) ([]domain.Transaction, int64, error)
+	FindAll(ctx context.Context, filter TransactionFilter) ([]domain.Transaction, int64, float64, error)
 	Void(ctx context.Context, id uuid.UUID) error
 	SumCashByShift(ctx context.Context, shiftID uuid.UUID) (float64, error)
 	GetShiftSummary(ctx context.Context, shiftID uuid.UUID) (*domain.ShiftSummary, error)

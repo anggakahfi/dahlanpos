@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log"
+	"os"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -36,9 +37,15 @@ type AuthResponse struct {
 func (uc *AuthUsecase) LoginWithOAuth(ctx context.Context, idTokenStr string) (*AuthResponse, error) {
 	var email string
 
-	// DEV BYPASS: Jika tidak ada Client ID, kita asumsikan idTokenStr adalah email murni untuk testing
-	if uc.googleClientID == "" || uc.googleClientID == "isi_dengan_client_id_google_anda_disini.apps.googleusercontent.com" {
-		log.Println("⚠️ OAUTH DEV BYPASS ACTIVATED: Using raw string as email")
+	// DEV BYPASS: Only in non-release mode. If no valid Client ID is configured,
+	// treat idTokenStr as a raw email for local testing purposes.
+	// BUG-04 FIX: This bypass is now DISABLED when GIN_MODE=release to prevent
+	// unauthorized access in production deployments.
+	ginMode := os.Getenv("GIN_MODE")
+	isDevBypass := ginMode != "release" && (uc.googleClientID == "" || uc.googleClientID == "isi_dengan_client_id_google_anda_disini.apps.googleusercontent.com")
+
+	if isDevBypass {
+		log.Println("⚠️ OAUTH DEV BYPASS ACTIVATED: Using raw string as email (non-release mode)")
 		email = idTokenStr
 	} else {
 		// Verify Google ID Token (Sistem Real)
