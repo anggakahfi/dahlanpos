@@ -186,6 +186,7 @@ export function ItemModifierDialog({
                   variant="outline"
                   className="h-12 w-12 p-0 rounded-full bg-background"
                   onClick={() => setQuantity(quantity + 1)}
+                  disabled={item.stock !== undefined && quantity >= item.stock}
                 >
                   <Plus className="h-5 w-5" />
                 </Button>

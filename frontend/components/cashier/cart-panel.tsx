@@ -134,6 +134,7 @@ export function CartPanel({ items, onUpdateQuantity, onRemoveItem, onClearCart }
                     variant="outline"
                     className="h-10 w-10 p-0 rounded-full"
                     onClick={() => onUpdateQuantity(item.id, item.quantity + 1)}
+                    disabled={item.stock !== undefined && item.quantity >= item.stock}
                   >
                     <Plus className="h-5 w-5" />
                   </Button>

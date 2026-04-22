@@ -81,13 +81,17 @@ func (r *transactionRepo) Create(ctx context.Context, txn *domain.Transaction) e
 			return err
 		}
 
-		// Deduct stock
-		_, err = dbTx.Exec(ctx,
+		// Deduct stock — WHERE stock >= $1 ensures atomic check-and-deduct
+		tag, err := dbTx.Exec(ctx,
 			`UPDATE products SET stock = stock - $1 WHERE id = $2 AND stock >= $1`,
 			item.Quantity, item.ProductID,
 		)
 		if err != nil {
 			return err
+		}
+		// If no row was updated, stock was insufficient — abort the whole transaction
+		if tag.RowsAffected() == 0 {
+			return fmt.Errorf("stok tidak mencukupi untuk produk %s (dibutuhkan %d)", *item.ProductID, item.Quantity)
 		}
 	}
 

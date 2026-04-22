@@ -114,7 +114,7 @@ export function MenuGrid({ selectedCategory, onCategoryChange, onAddToCart, menu
               <p className="text-primary font-semibold text-sm">
                 {formatPrice(item.price)}
               </p>
-              {item.stock !== undefined && item.stock < 10 && (
+              {item.stock !== undefined && (
                 <Badge variant="secondary" className="mt-2 text-xs">
                   Stok: {item.stock}
                 </Badge>
@@ -150,7 +150,7 @@ export function MenuGrid({ selectedCategory, onCategoryChange, onAddToCart, menu
               </div>
               <div className="text-right">
                 <p className="text-primary font-semibold">{formatPrice(item.price)}</p>
-                {item.stock !== undefined && item.stock < 10 && (
+                {item.stock !== undefined && (
                   <Badge variant="secondary" className="mt-1 text-xs">
                     Stok: {item.stock}
                   </Badge>

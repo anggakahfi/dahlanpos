@@ -45,15 +45,19 @@ export const useCartStore = create<CartState>((set, get) => ({
 
       if (existing) {
         return {
-          cartItems: state.cartItems.map((ci) =>
-            ci.id === existing.id
-              ? {
-                  ...ci,
-                  quantity: ci.quantity + quantity,
-                  subtotal: (ci.quantity + quantity) * finalItemPrice,
-                }
-              : ci
-          ),
+          cartItems: state.cartItems.map((ci) => {
+            if (ci.id === existing.id) {
+              const targetQuantity = ci.quantity + quantity
+              const newQuantity = item.stock !== undefined ? Math.min(targetQuantity, item.stock) : targetQuantity
+              return {
+                ...ci,
+                quantity: newQuantity,
+                subtotal: newQuantity * finalItemPrice,
+                stock: item.stock,
+              }
+            }
+            return ci
+          }),
         }
       }
 
@@ -64,11 +68,12 @@ export const useCartStore = create<CartState>((set, get) => ({
             id: `cart_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
             menuItemId: item.id,
             name: item.name,
-            quantity,
+            quantity: item.stock !== undefined ? Math.min(quantity, item.stock) : quantity,
             price: finalItemPrice,
+            stock: item.stock,
             modifiers,
             notes,
-            subtotal: quantity * finalItemPrice,
+            subtotal: (item.stock !== undefined ? Math.min(quantity, item.stock) : quantity) * finalItemPrice,
           },
         ],
       }
@@ -81,9 +86,13 @@ export const useCartStore = create<CartState>((set, get) => ({
       set((state) => ({ cartItems: state.cartItems.filter((ci) => ci.id !== itemId) }))
     } else {
       set((state) => ({
-        cartItems: state.cartItems.map((ci) =>
-          ci.id === itemId ? { ...ci, quantity, subtotal: quantity * ci.price } : ci
-        ),
+        cartItems: state.cartItems.map((ci) => {
+          if (ci.id === itemId) {
+            const newQuantity = ci.stock !== undefined ? Math.min(quantity, ci.stock) : quantity
+            return { ...ci, quantity: newQuantity, subtotal: newQuantity * ci.price }
+          }
+          return ci
+        }),
       }))
     }
   },

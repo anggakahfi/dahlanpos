@@ -102,6 +102,7 @@ export default function PaymentPage() {
       // Invalidate caches so other pages reflect the new transaction
       queryClient.invalidateQueries({ queryKey: ["shiftSummary"] })
       queryClient.invalidateQueries({ queryKey: ["transactions"] })
+      queryClient.invalidateQueries({ queryKey: ["cashier-menu"] })
 
       setIsSuccess(true)
       setTimeout(() => {

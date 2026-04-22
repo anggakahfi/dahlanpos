@@ -95,7 +95,7 @@ func (uc *AuthUsecase) LoginWithOAuth(ctx context.Context, idTokenStr string) (*
 		UserID:       user.ID,
 		OutletID:     user.OutletID,
 		ActivityType: domain.ActivityLogin,
-		Details:      "OAuth login via Google",
+		Details:      "Login via Google",
 	})
 
 	return &AuthResponse{Token: tokenStr, ExpiresAt: expiresAt, User: user}, nil
