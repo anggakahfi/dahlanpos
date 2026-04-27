@@ -184,6 +184,31 @@ func TestIntegration_DeleteCategory_EmptyCategory_Succeeds(t *testing.T) {
 	assert.Equal(t, 0, count)
 }
 
+// TestIntegration_CreateCategory_DuplicateName_Fails validates that the UNIQUE constraint
+// on the category name column is enforced at the database level, preventing homonymous
+// category entries from being inserted via the API.
+func TestIntegration_CreateCategory_DuplicateName_Fails(t *testing.T) {
+	ResetDB(t)
+	router := BuildRouter(t)
+
+	ownerID := InsertUser(t, "owner@test.com", domain.RoleOwner, nil)
+	token := MakeAuthToken(t, ownerID, "owner@test.com", domain.RoleOwner, nil)
+
+	// Buat kategori pertama — harus sukses
+	payload := `{"name": "Minuman"}`
+	w1 := DoRequest(t, router, "POST", "/api/v1/backoffice/categories", payload, token)
+	assert.Equal(t, http.StatusCreated, w1.Code)
+
+	// Buat kategori kedua dengan nama yang sama — harus ditolak
+	w2 := DoRequest(t, router, "POST", "/api/v1/backoffice/categories", payload, token)
+	assert.NotEqual(t, http.StatusCreated, w2.Code, "Nama kategori duplikat harus ditolak")
+
+	// Harus tetap hanya 1 row di DB
+	var count int
+	testDB.QueryRow(context.Background(), "SELECT COUNT(*) FROM categories WHERE name = 'Minuman'").Scan(&count)
+	assert.Equal(t, 1, count, "Harus tetap ada tepat 1 kategori bernama 'Minuman'")
+}
+
 // TestIntegration_DeleteModifier_LinkedToProduct_Cascades checks whether deleting 
 // a modifier natively evaluates the ON DELETE CASCADE condition on joining tables 
 // properly unbinding it from any attached products automatically.

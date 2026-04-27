@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
@@ -21,7 +22,9 @@ func newTxnUsecase() (*usecase.TransactionUsecase, *mocks.TransactionRepository,
 	lr := new(mocks.ActivityLogRepository)
 	pr := new(mocks.ProductRepository)
 	sr := new(mocks.ShiftRepository)
-	uc := usecase.NewTransactionUsecase(tr, lr, pr, sr)
+	or := new(mocks.OutletRepository)
+	or.On("FindByID", mock.Anything, mock.Anything).Return(&domain.Outlet{}, nil)
+	uc := usecase.NewTransactionUsecase(tr, lr, pr, sr, or)
 	return uc, tr, lr, pr, sr
 }
 
@@ -53,7 +56,7 @@ func TestCreateTransaction_Success(t *testing.T) {
 	outletID := uuid.New()
 
 	sr.On("FindByID", mock.Anything, shiftID).Return(&domain.Shift{
-		ID: shiftID, Status: domain.ShiftOpen,
+		ID: shiftID, Status: domain.ShiftOpen, StartedAt: time.Now(),
 	}, nil)
 	tr.On("Create", mock.Anything, mock.AnythingOfType("*domain.Transaction")).Return(nil)
 	lr.On("Create", mock.Anything, mock.AnythingOfType("*domain.ActivityLog")).Return(nil)
@@ -87,7 +90,7 @@ func TestCreateTransaction_Fail_ShiftAlreadyClosed(t *testing.T) {
 	userID, shiftID, outletID := uuid.New(), uuid.New(), uuid.New()
 
 	sr.On("FindByID", mock.Anything, shiftID).Return(&domain.Shift{
-		ID: shiftID, Status: domain.ShiftClosed,
+		ID: shiftID, Status: domain.ShiftClosed, StartedAt: time.Now(),
 	}, nil)
 
 	req := validCreateRequest(shiftID, outletID)
@@ -103,7 +106,7 @@ func TestCreateTransaction_SubtotalFallback(t *testing.T) {
 	userID, shiftID, outletID := uuid.New(), uuid.New(), uuid.New()
 
 	sr.On("FindByID", mock.Anything, shiftID).Return(&domain.Shift{
-		ID: shiftID, Status: domain.ShiftOpen,
+		ID: shiftID, Status: domain.ShiftOpen, StartedAt: time.Now(),
 	}, nil)
 	tr.On("Create", mock.Anything, mock.AnythingOfType("*domain.Transaction")).Return(nil)
 	lr.On("Create", mock.Anything, mock.Anything).Return(nil)
@@ -125,7 +128,7 @@ func TestCreateTransaction_WithModifiers(t *testing.T) {
 	userID, shiftID, outletID := uuid.New(), uuid.New(), uuid.New()
 
 	sr.On("FindByID", mock.Anything, shiftID).Return(&domain.Shift{
-		ID: shiftID, Status: domain.ShiftOpen,
+		ID: shiftID, Status: domain.ShiftOpen, StartedAt: time.Now(),
 	}, nil)
 	tr.On("Create", mock.Anything, mock.AnythingOfType("*domain.Transaction")).Return(nil)
 	lr.On("Create", mock.Anything, mock.Anything).Return(nil)
@@ -162,7 +165,7 @@ func TestCreateTransaction_LogsActivity(t *testing.T) {
 	userID, shiftID, outletID := uuid.New(), uuid.New(), uuid.New()
 
 	sr.On("FindByID", mock.Anything, shiftID).Return(&domain.Shift{
-		ID: shiftID, Status: domain.ShiftOpen,
+		ID: shiftID, Status: domain.ShiftOpen, StartedAt: time.Now(),
 	}, nil)
 	tr.On("Create", mock.Anything, mock.Anything).Return(nil)
 	lr.On("Create", mock.Anything, mock.AnythingOfType("*domain.ActivityLog")).Return(nil)
@@ -187,7 +190,7 @@ func TestVoidTransaction_Success(t *testing.T) {
 		ID: txnID, ShiftID: shiftID, PaymentStatus: domain.PaymentPaid,
 	}, nil)
 	sr.On("FindByID", mock.Anything, shiftID).Return(&domain.Shift{
-		ID: shiftID, UserID: userID,
+		ID: shiftID, UserID: userID, StartedAt: time.Now(),
 	}, nil)
 	tr.On("Void", mock.Anything, txnID).Return(nil)
 	lr.On("Create", mock.Anything, mock.Anything).Return(nil)
@@ -235,7 +238,7 @@ func TestVoidTransaction_Fail_NotShiftOwner(t *testing.T) {
 		ID: txnID, ShiftID: shiftID, PaymentStatus: domain.PaymentPaid,
 	}, nil)
 	sr.On("FindByID", mock.Anything, shiftID).Return(&domain.Shift{
-		ID: shiftID, UserID: ownerID,
+		ID: shiftID, UserID: ownerID, StartedAt: time.Now(),
 	}, nil)
 
 	err := uc.VoidTransaction(context.Background(), txnID, attackerID)

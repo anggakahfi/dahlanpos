@@ -1,0 +1,13 @@
+server_linux
+server.exe
+main.exe
+*.exe
+*.log
+coverage*
+out.txt
+backend_err.log
+check_db.go
+check_tx_date.go
+fix_db.go
+list_users.go
+reset_demo.go

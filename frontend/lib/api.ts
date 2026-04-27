@@ -3,7 +3,7 @@
 // { success: true, data: T, meta?: { page, per_page, total, total_pages } }
 // { success: false, error: { code: string, message: string } }
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080'
+const API_BASE = typeof window !== 'undefined' ? '' : (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080')
 
 import type { Transaction } from './types'
 
@@ -541,7 +541,7 @@ export async function getShiftSummary(shiftId: string) {
 export async function getPublicReceipt(id: string) {
   // This endpoint returns { success, transaction, settings, outlet } — NOT the standard { success, data } envelope
   // So we must fetch raw without going through the standard apiFetch wrapper
-  const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080'
+  const API_URL = typeof window !== 'undefined' ? '' : (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080')
   const res = await fetch(`${API_URL}/api/v1/public/receipts/${id}`, { cache: 'no-store' })
   if (!res.ok) throw new Error('Receipt not found')
   const json = await res.json()

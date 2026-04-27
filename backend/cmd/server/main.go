@@ -48,7 +48,7 @@ func main() {
 	authUC := usecase.NewAuthUsecase(userRepo, activityLogRepo, cfg.JWTSecret, cfg.GoogleClientID)
 	cashierUC := usecase.NewCashierUsecase(productRepo, categoryRepo, modifierRepo)
 	shiftUC := usecase.NewShiftUsecase(shiftRepo, txnRepo, activityLogRepo, outletRepo)
-	txnUC := usecase.NewTransactionUsecase(txnRepo, activityLogRepo, productRepo, shiftRepo)
+	txnUC := usecase.NewTransactionUsecase(txnRepo, activityLogRepo, productRepo, shiftRepo, outletRepo)
 	productUC := usecase.NewProductUsecase(productRepo)
 	categoryUC := usecase.NewCategoryUsecase(categoryRepo)
 	modifierUC := usecase.NewModifierUsecase(modifierRepo)

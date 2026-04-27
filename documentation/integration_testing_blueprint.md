@@ -168,8 +168,8 @@ Prioritas ditentukan berdasarkan: **dampak bisnis** (kerugian jika bug lolos), *
 | 9 | `PUT /backoffice/products/:id` | Update produk beserta modifier group linkage; Rollback jika modifier_group_id tidak ada | Happy path (data & modifier terupdate di DB), modifier_group_id invalid → error |
 | 10 | `PATCH /backoffice/products/:id/stock` | `SetAbsoluteStock` harus set nilai absolut, bukan delta — bug disini = stok salah permanen | Happy path (stok di DB = nilai yang dikirim), stok negatif ditolak |
 | 11 | `POST /backoffice/categories` | UNIQUE constraint pada nama kategori | Happy path (tersimpan), nama duplikat → error |
-| 12 | `DELETE /backoffice/categories/:id` | FK guard — kategori yang dipakai produk tidak boleh dihapus | Hapus kategori kosong → 200, hapus kategori berisi produk → 409 |
-| 13 | `DELETE /backoffice/modifier-groups/:id` | FK guard — modifier yang terhubung produk tidak boleh dihapus | Hapus modifier bebas → 200, hapus modifier terhubung produk → 409 |
+| 12 | `DELETE /backoffice/categories/:id` | ON DELETE SET NULL — kategori terhapus, `category_id` produk menjadi NULL | Hapus kategori kosong → 200 (row hilang), hapus kategori berisi produk → 200 (`category_id` produk jadi NULL) |
+| 13 | `DELETE /backoffice/modifier-groups/:id` | ON DELETE CASCADE — modifier terhapus beserta seluruh relasi join table | Hapus modifier bebas → 200, hapus modifier terhubung produk → 200 (join table ter-cascade) |
 | 14 | `GET /cashier/menu` | JOIN categories + modifier_groups + options; produk inactive tidak boleh muncul | Menu hanya berisi produk active, modifier_options ter-load, produk tanpa kategori tetap muncul |
 | 15 | `GET /cashier/shifts/current/summary` | Agregasi cash sales + QRIS sales per shift harus akurat | Summary mencerminkan total transaksi aktif (paid), void tidak ikut dihitung |
 | 16 | `GET /backoffice/dashboard/summary` | Agregasi multi-tabel lintas transaksi; angka salah = owner salah ambil keputusan | Revenue hari ini akurat, filter by outlet_id berfungsi |
@@ -249,7 +249,7 @@ Prioritas ditentukan berdasarkan: **dampak bisnis** (kerugian jika bug lolos), *
 
 ### 6.4 Tier 2 — Produk & Kategori
 
-**File:** `backoffice_integration_test.go` (belum dibuat)
+**File:** `backoffice_integration_test.go`
 
 | Test Function | Skenario | Assert HTTP | Assert DB |
 |---------------|----------|-------------|-----------|
@@ -258,13 +258,13 @@ Prioritas ditentukan berdasarkan: **dampak bisnis** (kerugian jika bug lolos), *
 | `CreateProduct_InvalidCategory_Fails` | Buat produk dengan category_id tidak ada | error (4xx/5xx) | Tidak ada row baru di `products` |
 | `UpdateProduct_StockPatch_SetsAbsolute` | PATCH stock dari 10 → 3 | 200 | `stock = 3` (bukan `stock = 10 - 3`) |
 | `CreateCategory_DuplicateName_Fails` | Buat kategori dengan nama yang sudah ada | error (4xx) | Tetap 1 row kategori bernama itu |
-| `DeleteCategory_WithProducts_Returns409` | Hapus kategori yang masih dipakai produk | 409 | Kategori masih ada di DB |
+| `DeleteCategory_WithProducts_SetsProductsToNull` | Hapus kategori yang masih dipakai produk | 200 *(ON DELETE SET NULL)* | Kategori terhapus; `category_id` produk menjadi **NULL** |
 | `DeleteCategory_EmptyCategory_Succeeds` | Hapus kategori tanpa produk | 200 | Row terhapus dari `categories` |
-| `DeleteModifier_LinkedToProduct_Returns409` | Hapus modifier yang terhubung produk | 409 | Modifier masih ada di DB |
+| `DeleteModifier_LinkedToProduct_Cascades` | Hapus modifier yang terhubung produk | 200 *(ON DELETE CASCADE)* | Modifier terhapus; relasi di `product_modifier_groups` ikut terhapus |
 
 ### 6.5 Tier 2 — Menu & Agregasi
 
-**File:** `backoffice_integration_test.go` (belum dibuat)
+**File:** `backoffice_integration_test.go`
 
 | Test Function | Skenario | Assert HTTP | Assert DB / Response |
 |---------------|----------|-------------|----------------------|

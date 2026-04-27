@@ -33,9 +33,14 @@ func (r *transactionRepo) Create(ctx context.Context, txn *domain.Transaction) e
 	var seq int
 	// Advisory lock scoped by outlet to avoid cross-outlet contention
 	_, _ = dbTx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtext($1::text))`, txn.OutletID)
+	
+	now := time.Now()
+	startOfDay := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+	nextDay := startOfDay.Add(24 * time.Hour)
+
 	err = dbTx.QueryRow(ctx,
-		`SELECT COUNT(*) + 1 FROM transactions WHERE DATE(created_at) = CURRENT_DATE AND outlet_id = $1`,
-		txn.OutletID,
+		`SELECT COUNT(*) + 1 FROM transactions WHERE created_at >= $1 AND created_at < $2 AND outlet_id = $3`,
+		startOfDay, nextDay, txn.OutletID,
 	).Scan(&seq)
 	if err != nil {
 		return err

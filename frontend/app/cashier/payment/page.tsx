@@ -6,12 +6,20 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
-import { ArrowLeft, Banknote, Smartphone, Check, AlertCircle } from "lucide-react"
+import { AlertCircle, ArrowLeft, Banknote, Check, AlertTriangle, Smartphone } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { createTransaction } from "@/lib/api"
 import { useCartStore } from "@/features/cashier/stores/useCartStore"
 import type { CartItem } from "@/lib/types"
 import { useQueryClient } from "@tanstack/react-query"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog"
 
 interface CheckoutData {
   items: CartItem[]
@@ -303,6 +311,34 @@ export default function PaymentPage() {
           }
         </Button>
       </div>
+
+      <Dialog open={!!error && error.includes("Tutup Shift")} onOpenChange={() => {}}>
+        <DialogContent className="sm:max-w-md [&>button]:hidden">
+          <DialogHeader>
+            <div className="mx-auto w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mb-4">
+              <AlertTriangle className="h-8 w-8 text-red-600" />
+            </div>
+            <DialogTitle className="text-center text-xl">Shift Kadaluarsa</DialogTitle>
+            <DialogDescription className="text-center text-base pt-2 font-medium">
+              Waktu operasional outlet telah berakhir atau shift sudah berjalan melampaui batas maksimal.
+            </DialogDescription>
+            <p className="text-sm text-center text-muted-foreground pt-2">
+              Sistem menolak transaksi baru. Anda diwajibkan untuk merekonsiliasi kasir dan menutup shift hari ini.
+            </p>
+          </DialogHeader>
+          <DialogFooter className="sm:justify-center mt-6">
+            <Button
+              type="button"
+              variant="default"
+              size="lg"
+              className="w-full font-bold"
+              onClick={() => router.push("/cashier/shift")}
+            >
+              Pergi ke Halaman Tutup Shift
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

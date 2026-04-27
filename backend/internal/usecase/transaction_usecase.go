@@ -15,10 +15,11 @@ type TransactionUsecase struct {
 	logRepo     repository.ActivityLogRepository
 	productRepo repository.ProductRepository
 	shiftRepo   repository.ShiftRepository
+	outletRepo  repository.OutletRepository
 }
 
-func NewTransactionUsecase(tr repository.TransactionRepository, lr repository.ActivityLogRepository, pr repository.ProductRepository, sr repository.ShiftRepository) *TransactionUsecase {
-	return &TransactionUsecase{txnRepo: tr, logRepo: lr, productRepo: pr, shiftRepo: sr}
+func NewTransactionUsecase(tr repository.TransactionRepository, lr repository.ActivityLogRepository, pr repository.ProductRepository, sr repository.ShiftRepository, or repository.OutletRepository) *TransactionUsecase {
+	return &TransactionUsecase{txnRepo: tr, logRepo: lr, productRepo: pr, shiftRepo: sr, outletRepo: or}
 }
 
 // CreateTransaction processes a new sale with stock deduction.
@@ -30,6 +31,15 @@ func (uc *TransactionUsecase) CreateTransaction(ctx context.Context, req domain.
 	}
 	if shift.Status != domain.ShiftOpen {
 		return nil, errors.New("shift sudah ditutup, tidak bisa membuat transaksi baru")
+	}
+
+	outlet, err := uc.outletRepo.FindByID(ctx, req.OutletID)
+	if err != nil {
+		return nil, errors.New("outlet tidak ditemukan")
+	}
+
+	if err := checkShiftExpiration(shift, outlet); err != nil {
+		return nil, err
 	}
 
 	// Calculate subtotal
@@ -108,6 +118,15 @@ func (uc *TransactionUsecase) VoidTransaction(ctx context.Context, id uuid.UUID,
 	}
 	if shift.UserID != userID {
 		return errors.New("anda tidak berhak men-void transaksi milik kasir lain")
+	}
+
+	outlet, err := uc.outletRepo.FindByID(ctx, txn.OutletID)
+	if err != nil {
+		return errors.New("outlet tidak ditemukan")
+	}
+
+	if err := checkShiftExpiration(shift, outlet); err != nil {
+		return err
 	}
 
 	if err := uc.txnRepo.Void(ctx, id); err != nil {

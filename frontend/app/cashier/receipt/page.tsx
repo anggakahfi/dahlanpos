@@ -225,7 +225,7 @@ export default function ReceiptPage() {
               </p>
               <div className="bg-white p-2 rounded-lg border">
                 <QRCode
-                  value={`${window.location.origin}/r/${receipt.id}`}
+                  value={`${process.env.NEXT_PUBLIC_SITE_URL || (typeof window !== 'undefined' ? window.location.origin : '')}/r/${receipt.id}`}
                   size={180}
                   level="M"
                 />

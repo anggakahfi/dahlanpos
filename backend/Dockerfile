@@ -1,3 +1,15 @@
+FROM golang:1.25-alpine AS builder
+
+WORKDIR /app
+
+COPY go.mod go.sum ./
+RUN go mod download
+
+COPY . .
+
+# Build the binary
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o server ./cmd/server/main.go
+
 FROM debian:bookworm-slim
 
 # Install dependencies
@@ -9,14 +21,11 @@ RUN ln -sf /usr/share/zoneinfo/Asia/Jakarta /etc/localtime && echo "Asia/Jakarta
 
 WORKDIR /app
 
-# Copy the pre-built Linux binary (built on host)
-COPY server_linux ./server
+# Copy the binary from builder
+COPY --from=builder /app/server ./server
 
 # Copy migrations and other assets
 COPY db/migrations ./db/migrations
-
-# Ensure the server is executable
-RUN chmod +x ./server
 
 EXPOSE 8080
 
