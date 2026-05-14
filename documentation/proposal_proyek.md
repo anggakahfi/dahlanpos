@@ -81,11 +81,15 @@ Proposal ini telah disetujui dan disahkan oleh pihak-pihak berikut:
 
 ## 1.1 Latar Belakang
 
-Industri F&B (Food & Beverage) di Indonesia mengalami pertumbuhan yang signifikan dalam beberapa tahun terakhir, khususnya segmen kedai kopi yang tumbuh pesat sejak 2018. Bisnis F&B skala kecil hingga menengah menghadapi tantangan operasional yang kompleks, terutama dalam hal manajemen transaksi, pengelolaan stok, dan pelaporan keuangan.
+Perkembangan teknologi informasi dan komunikasi yang pesat di era digital saat ini telah membawa transformasi besar pada berbagai sektor industri, tidak terkecuali pada industri Food & Beverage (F&B). Di Indonesia, industri F&B terus menunjukkan tren pertumbuhan yang positif, didorong oleh perubahan gaya hidup masyarakat dan tingginya minat terhadap budaya nongkrong, khususnya di kedai kopi. Kedai kopi modern kini bukan hanya tempat untuk menikmati minuman, tetapi juga berfungsi sebagai ruang sosial, tempat bekerja, dan berkumpul. Seiring dengan pertumbuhan jumlah kedai kopi, tingkat persaingan pun semakin ketat. Hal ini menuntut para pelaku usaha, khususnya pada skala Usaha Mikro, Kecil, dan Menengah (UMKM), untuk terus meningkatkan efisiensi operasional dan kualitas pelayanan demi mempertahankan kelangsungan bisnisnya.
 
-Mayoritas pelaku usaha F&B skala kecil masih mengandalkan metode pencatatan manual (buku kas) atau menggunakan aplikasi kasir mobile yang memiliki keterbatasan: biaya berlangganan bulanan yang tinggi, tidak fleksibel untuk dikustomisasi, sulit diintegrasikan dengan alur kerja spesifik bisnis, dan seringkali terbatas hanya untuk satu outlet.
+Salah satu elemen krusial dalam operasional bisnis F&B adalah sistem kasir atau Point of Sale (POS). Sistem POS tidak hanya berfungsi sebagai mesin kasir elektronik untuk mencatat transaksi penjualan, tetapi juga sebagai pusat kendali operasional harian yang mencakup manajemen stok inventaris, pengelolaan shift karyawan, serta pencatatan arus kas. Sayangnya, banyak pelaku usaha kedai kopi skala kecil hingga menengah yang masih terjebak dalam metode pencatatan manual menggunakan buku kas atau menggunakan mesin kasir konvensional tanpa fitur analitik. Metode tradisional ini sangat rentan terhadap *human error*, membutuhkan waktu lama untuk proses rekapitulasi data di akhir hari kerja, serta menyulitkan pemilik usaha dalam melakukan pemantauan stok secara *real-time*. Dampaknya, sering terjadi selisih antara uang kas dan laporan penjualan, kebocoran inventaris, serta keterlambatan dalam pengambilan keputusan bisnis karena tidak tersedianya data yang akurat dan cepat.
 
-Kebutuhan akan sistem yang terjangkau, andal, dan dapat dioperasikan di beberapa cabang sekaligus (multi-outlet) mendorong lahirnya ide pengembangan **Small Things Coffee POS** — sebuah solusi open-source yang dirancang dari perspektif developer untuk menjawab kebutuhan nyata di lapangan.
+Di sisi lain, meskipun saat ini telah banyak bermunculan aplikasi kasir digital atau POS komersial berbasis *cloud*, penggunaannya seringkali tidak sejalan dengan kemampuan finansial dan kebutuhan spesifik UMKM. Aplikasi POS komersial umumnya menetapkan skema berlangganan bulanan atau tahunan dengan biaya yang cukup membebani biaya operasional (OPEX) usaha kecil. Selain itu, fitur-fitur yang ditawarkan terkadang terlalu kompleks dan tidak relevan, atau sebaliknya, kurang fleksibel untuk dikustomisasi sesuai dengan alur kerja (SOP) spesifik dari kedai kopi tersebut. Keterbatasan lain yang sering dikeluhkan adalah sulitnya integrasi untuk bisnis yang mulai berkembang dan memiliki lebih dari satu cabang (multi-outlet), di mana fitur sinkronisasi antar cabang biasanya mengharuskan pemilik usaha untuk melakukan *upgrade* ke paket berlangganan yang lebih mahal.
+
+Merespons tantangan dan celah dalam ketersediaan sistem yang terjangkau serta fungsional tersebut, muncul kebutuhan akan sebuah sistem POS yang efisien, andal, dan dapat diakses tanpa biaya berlangganan yang memberatkan. Oleh karena itu, diusulkanlah pengembangan **Small Things Coffee POS** (selanjutnya disebut **DahlanPOS**). DahlanPOS dirancang sebagai aplikasi Point of Sale berbasis web yang *open-source* atau *self-hosted*, yang ditujukan khusus untuk memberikan solusi digitalisasi operasional bagi bisnis F&B skala menengah ke bawah. Dengan mengusung arsitektur berbasis web, sistem ini menawarkan fleksibilitas tinggi karena dapat diakses melalui berbagai perangkat (komputer, laptop, maupun tablet) yang sudah dimiliki oleh pelaku usaha, tanpa memerlukan investasi perangkat keras khusus yang mahal. 
+
+Pengembangan DahlanPOS tidak hanya bertujuan untuk mendigitalkan proses pencatatan transaksi agar lebih cepat dan presisi, tetapi juga untuk menyediakan ekosistem pengelolaan yang komprehensif. Fitur manajemen multi-outlet akan memungkinkan pemilik bisnis memantau performa penjualan, ketersediaan stok, dan kinerja kasir di setiap cabangnya secara *real-time* melalui satu dasbor terpusat. Dengan adanya sistem pelaporan dan manajemen operasional yang transparan dan terotomatisasi ini, diharapkan pemilik usaha dapat mengurangi risiko kerugian finansial, meningkatkan produktivitas karyawan, dan pada akhirnya dapat berfokus pada inovasi produk serta ekspansi bisnis. Pengembangan sistem ini sekaligus menjadi implementasi nyata dari penerapan teknologi informasi untuk memberdayakan UMKM agar lebih berdaya saing di era ekonomi digital.
 
 ## 1.2 Identifikasi Masalah
 
@@ -449,7 +453,7 @@ DahlanPOS Project
 
 ## 6.1 Gantt Chart
 
-> **Durasi Total:** <!-- [PLACEHOLDER: X Minggu] --> | **Mulai:** <!-- [PLACEHOLDER: dd MMM YYYY] -->
+> **Durasi Total:** 14 Minggu | **Mulai:** 16 Maret 2026
 
 | Fase / Kegiatan | M1 | M2 | M3 | M4 | M5 | M6 | M7 | M8 | M9 | M10 | M11 | M12 | M13 | M14 |
 |---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
@@ -478,12 +482,12 @@ DahlanPOS Project
 
 | Milestone | Target Tanggal | Status |
 |---|---|---|
-| M0 — Proposal Disetujui | <!-- [PLACEHOLDER] --> | 🔵 Planned |
-| M1 — Core Infrastructure Done | <!-- [PLACEHOLDER] --> | 🔵 Planned |
-| M2 — Backoffice Complete | <!-- [PLACEHOLDER] --> | 🔵 Planned |
-| M3 — Kasir Module Complete | <!-- [PLACEHOLDER] --> | 🔵 Planned |
-| M4 — Testing & UAT Complete | <!-- [PLACEHOLDER] --> | 🔵 Planned |
-| M5 — Live Deployment & Handover | <!-- [PLACEHOLDER] --> | 🔵 Planned |
+| M0 — Proposal Disetujui | 29 Maret 2026 | 🟢 Completed |
+| M1 — Core Infrastructure Done | 5 April 2026 | 🟢 Completed |
+| M2 — Backoffice Complete | 19 April 2026 | 🟢 Completed |
+| M3 — Kasir Module Complete | 10 Mei 2026 | 🟢 Completed |
+| M4 — Testing & UAT Complete | 24 Mei 2026 | 🔵 Planned |
+| M5 — Live Deployment & Handover | 7 Juni 2026 | 🔵 Planned |
 
 ---
 

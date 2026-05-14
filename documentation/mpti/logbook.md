@@ -1,0 +1,10 @@
+# Logbook Proyek MPTI - DahlanPOS
+
+## Logbook Kelompok
+
+| No | Kegiatan | Waktu Pelaksanaan (Hari, Tanggal & Durasi) | Hasil | Kendala dan Rencana Perubahan |
+|:---:|---|---|---|---|
+| 1 | Menentukan dan mencari klien/mitra proyek. Melakukan survei calon mitra usaha F&B di sekitar kampus dan mengidentifikasi kebutuhan digitalisasi operasional. | Senin, 6 April 2026 – Jumat, 10 April 2026 (Durasi: 10 Jam) | Klien/mitra proyek berhasil ditentukan yaitu Small Things Coffee. Hasil observasi awal menunjukkan bahwa kedai masih menggunakan pencatatan manual dan membutuhkan sistem kasir digital. | |
+| 2 | Wawancara kebutuhan klien dan analisis requirement. Melakukan diskusi mendalam dengan pemilik usaha untuk menggali permasalahan operasional dan kebutuhan fitur sistem POS. | Senin, 13 April 2026 – Jumat, 17 April 2026 (Durasi: 10 Jam) | Daftar kebutuhan fungsional dan non-fungsional berhasil diidentifikasi, mencakup modul login, backoffice (manajemen produk, karyawan, outlet, laporan), dan modul kasir (shift, transaksi, struk digital). Ruang lingkup proyek (in-scope dan out-of-scope) telah disepakati bersama klien. | |
+| 3 | Penyusunan proposal proyek dan project charter. Menyusun dokumen proposal yang mencakup latar belakang, tujuan, ruang lingkup, analisis risiko, WBS, jadwal pelaksanaan, RACI, dan RAB. | Senin, 20 April 2026 – Jumat, 24 April 2026 (Durasi: 15 Jam) | Dokumen proposal proyek DahlanPOS versi 1.0 selesai disusun dan siap untuk diajukan kepada dosen pembimbing. Project charter, WBS (Fase 0–5), Gantt Chart (M1–M14), RACI matrix, dan analisis risiko telah terdokumentasi. | |
+| 4 | Desain arsitektur sistem, desain database (ERD), dan setup environment pengembangan. Merancang arsitektur teknis (frontend, backend, database), membuat ERD, serta menyiapkan repository GitHub dan Docker Compose. | Senin, 27 April 2026 – Jumat, 1 Mei 2026 (Durasi: 15 Jam) | Arsitektur sistem (Next.js + Go/Gin + PostgreSQL) telah difinalisasi. ERD dengan 10+ tabel berhasil dirancang. Repository GitHub, Docker Compose (multi-service), dan environment pengembangan lokal siap digunakan oleh seluruh anggota tim. | |
