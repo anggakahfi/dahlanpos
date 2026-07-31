@@ -43,98 +43,128 @@ Aplikasi kasir berbayar yang tersedia di pasaran memiliki biaya berlangganan bul
 
 ---
 
-## B. Analisis Kelayakan Website
+## B. Analisis Kelayakan Sistem
 
-Analisis kelayakan dilakukan menggunakan kerangka SWOT (*Strengths, Weaknesses, Opportunities, Threats*) untuk menilai kelayakan pengembangan sistem **Small Things Coffee POS (DahlanPOS)**.
+Analisis kelayakan dilakukan menggunakan kerangka SWOT (*Strengths, Weaknesses, Opportunities, Threats*) untuk menilai kelayakan pengembangan sistem **Small Things Coffee POS (DahlanPOS)** dari perspektif manfaat bisnis dan pengalaman pengguna.
 
 **Tabel 2.1 Analisis Kelayakan Sistem (SWOT)**
 
 | | **Positif** | **Negatif** |
 |---|---|---|
 | **Internal** | **Kekuatan (*Strengths*)** | **Kelemahan (*Weaknesses*)** |
-| | 1. Infrastruktur *zero-cost* — seluruh layanan cloud berjalan tanpa biaya bulanan menggunakan *free tier* modern (Vercel, Railway, Neon, Cloudinary). | 1. Kapasitas tim terbatas (≤4 orang), sehingga pengerjaan fitur yang kompleks membutuhkan manajemen waktu yang ketat. |
-| | 2. *Tech stack* modern dan terstruktur (Go + Next.js + PostgreSQL + Docker) memastikan sistem mudah dipelihara dan dikembangkan lebih lanjut. | 2. Layanan *hosting* gratis (*free tier*) memiliki potensi *cold start* — aplikasi memerlukan beberapa detik untuk merespons setelah lama tidak diakses. |
-| | 3. Sistem multi-outlet terpusat memungkinkan pemilik memantau seluruh cabang dari satu dasbor secara *real-time*. | 3. Verifikasi pembayaran QRIS dilakukan secara manual oleh kasir, tidak ada integrasi otomatis dengan *payment gateway*. |
-| | 4. Autentikasi berbasis Google OAuth (SSO) — tidak diperlukan pengelolaan kata sandi, aman dan mudah digunakan. | 4. Sistem dirancang untuk skala UMKM (5–10 pengguna bersamaan), belum mendukung beban pengguna yang sangat besar. |
+| | 1. Sistem dapat dijalankan tanpa biaya berlangganan bulanan, sehingga tidak membebani keuangan usaha skala UMKM. | 1. Tim pengembang berjumlah kecil, sehingga penyesuaian fitur atas permintaan mendadak memerlukan waktu lebih lama. |
+| | 2. Antarmuka kasir dirancang sederhana dan responsif, sehingga kasir baru dapat mengoperasikan sistem tanpa pelatihan teknis yang panjang. | 2. Sistem membutuhkan koneksi internet yang stabil untuk dapat beroperasi secara optimal. |
+| | 3. Pemilik usaha dapat memantau performa seluruh cabang dan laporan penjualan harian dari satu halaman dasbor kapan saja. | 3. Konfirmasi pembayaran QRIS masih dilakukan secara manual oleh kasir, sehingga menambah satu langkah dalam proses transaksi. |
+| | 4. Sistem masuk menggunakan akun Google yang sudah dimiliki, tanpa perlu mengingat kata sandi baru — aman dan praktis. | 4. Kapasitas pengguna bersamaan masih terbatas, sesuai skala operasional UMKM saat ini. |
 | **Eksternal** | **Peluang (*Opportunities*)** | **Ancaman (*Threats*)** |
-| | 1. Tingginya pertumbuhan bisnis F&B (kedai kopi) di Indonesia membuka peluang adopsi sistem oleh UMKM sejenis. | 1. Kebijakan *free tier* dari penyedia layanan cloud sewaktu-waktu dapat berubah, meningkatkan biaya operasional. |
-| | 2. Proyek bersifat *open-source* sehingga dapat menjadi referensi dan portofolio bagi pengembang lain. | 2. Perubahan kebijakan Google OAuth dapat mempengaruhi alur autentikasi sistem. |
-| | 3. Sistem dapat dikembangkan lebih lanjut dengan fitur tambahan seperti program loyalitas pelanggan, integrasi QRIS otomatis, atau laporan akuntansi lanjutan. | 3. Kompetitor aplikasi POS komersial terus berkembang, sehingga sistem perlu diperbarui secara berkala agar tetap relevan. |
+| | 1. Pertumbuhan bisnis kedai kopi di Indonesia yang pesat membuka peluang adopsi sistem kasir digital oleh UMKM F&B sejenis. | 1. Perubahan kebijakan layanan infrastruktur digital yang digunakan dapat meningkatkan biaya operasional sistem di masa depan. |
+| | 2. Sistem yang terdokumentasi dengan baik dapat dikembangkan lebih lanjut atau diadaptasi oleh usaha lain dengan kebutuhan serupa. | 2. Ketergantungan pada layanan pihak ketiga untuk proses masuk (*login*) berpotensi terdampak jika kebijakan layanan tersebut berubah. |
+| | 3. Sistem dapat diperluas dengan fitur tambahan seperti program loyalitas pelanggan, laporan keuangan lanjutan, atau konfirmasi pembayaran otomatis seiring pertumbuhan usaha. | 3. Aplikasi kasir komersial terus berkembang dengan fitur yang semakin lengkap, sehingga sistem perlu diperbarui secara berkala agar tetap kompetitif. |
+
+Berdasarkan pemetaan SWOT di atas, dirumuskan empat strategi lintas kuadran sebagai berikut:
+
+**1. Strategi S-O (*Strengths – Opportunities*)**
+
+a. Memanfaatkan kemudahan penggunaan dan nol biaya berlangganan sebagai nilai utama yang ditawarkan kepada pelaku UMKM F&B, sehingga mendorong adopsi sistem kasir digital secara lebih luas di kalangan usaha sejenis.
+
+b. Mengoptimalkan fitur dasbor terpusat dan laporan penjualan otomatis sebagai solusi nyata bagi pemilik usaha yang selama ini kesulitan memantau performa toko tanpa harus hadir langsung di lokasi.
+
+c. Memastikan sistem dirancang dengan fondasi yang dapat dikembangkan, sehingga fitur-fitur baru seperti program loyalitas pelanggan atau laporan keuangan dapat ditambahkan seiring pertumbuhan kebutuhan bisnis tanpa harus membangun ulang dari awal.
+
+**2. Strategi S-T (*Strengths – Threats*)**
+
+a. Menjaga keunggulan pengalaman pengguna — kecepatan transaksi, antarmuka yang bersih, dan kemudahan navigasi — sebagai pembeda utama dibandingkan aplikasi kasir komersial yang umumnya lebih rumit dan mahal.
+
+b. Menerapkan mekanisme hak akses yang ketat sehingga data transaksi dan laporan keuangan hanya dapat diakses oleh pihak yang berwenang, melindungi kepentingan bisnis dari risiko kebocoran informasi.
+
+c. Mendokumentasikan prosedur cadangan dan pemulihan sistem agar operasional toko dapat tetap berjalan dan data tidak hilang meskipun terjadi gangguan pada layanan pihak ketiga.
+
+**3. Strategi W-O (*Weaknesses – Opportunities*)**
+
+a. Membangun sistem dengan struktur yang modular dan terorganisasi sehingga penambahan fitur baru dapat dilakukan secara bertahap tanpa mengganggu operasional kasir yang sedang berjalan.
+
+b. Mengotomasi pencatatan shift, stok, dan transaksi harian untuk mengurangi ketergantungan pada proses manual, sehingga kasir dapat lebih fokus pada pelayanan pelanggan.
+
+c. Menjajaki peluang kemitraan dengan program digitalisasi UMKM guna mendukung keberlanjutan pengembangan sistem apabila kebutuhan fitur melebihi kapasitas tim saat ini.
+
+**4. Strategi W-T (*Weaknesses – Threats*)**
+
+a. Mengurangi seluruh pencatatan manual — mulai dari transaksi penjualan, pengelolaan stok, hingga rekap shift — sehingga potensi kesalahan manusia berkurang dan data yang dihasilkan lebih dapat diandalkan untuk pengambilan keputusan bisnis.
+
+b. Menyediakan panduan penggunaan sistem yang ringkas dan mudah dipahami oleh pemilik maupun kasir, agar sistem digunakan secara konsisten dan sesuai prosedur operasional sejak hari pertama.
+
+c. Membangun fitur riwayat aktivitas yang dapat dipantau pemilik, sehingga setiap anomali operasional — seperti pembatalan transaksi yang tidak wajar — dapat terdeteksi lebih awal dan ditindaklanjuti dengan cepat.
 
 > **Referensi:** [`proposal_proyek.md § 3.3`](./proposal_proyek.md) | [`infrastructure_cost.md`](./infrastructure_cost.md)
+
 
 ---
 
 ## C. Work Breakdown Structure (WBS)
 
-*Work Breakdown Structure* (WBS) proyek DahlanPOS disusun secara hierarkis berdasarkan fase pengembangan untuk memastikan seluruh pekerjaan terdefinisi, terdistribusi, dan dapat dipantau dengan baik.
+*Work Breakdown Structure* (WBS) proyek DahlanPOS disusun secara hierarkis mengikuti kerangka *Software Development Life Cycle* (SDLC) yang terdiri dari lima fase utama: **Inisiasi & Perencanaan**, **Analisis & Perancangan**, **Implementasi**, **Pengujian**, dan **Penerapan & Penutupan**. Struktur ini memastikan seluruh pekerjaan terdefinisi, dapat didelegasikan, dan memiliki kriteria keberhasilan yang terukur pada setiap fasenya.
 
 ```
 DahlanPOS Project — Small Things Coffee POS
 │
-├── Fase 0: Inisiasi & Perencanaan
-│   ├── 0.1 Analisis requirement & wawancara klien
-│   ├── 0.2 Penyusunan proposal proyek
-│   ├── 0.3 Desain arsitektur sistem (Clean Architecture)
-│   ├── 0.4 Desain database (ERD + DDL Migration Scripts)
-│   └── 0.5 Setup environment & repository (GitHub)
+├── Fase 1: Inisiasi & Perencanaan
+│   ├── 1.1 Identifikasi kebutuhan & wawancara pemangku kepentingan (klien)
+│   ├── 1.2 Penyusunan & pengesahan proposal proyek
+│   ├── 1.3 Pembentukan tim & penetapan peran (Project Charter)
+│   ├── 1.4 Penyusunan rencana jadwal & anggaran proyek (WBS, Gantt Chart)
+│   └── 1.5 Penandatanganan perjanjian kemitraan (MoU)
 │
-├── Fase 1: Core Infrastructure
-│   ├── 1.1 Setup Backend (Go/Gin boilerplate + Clean Architecture)
-│   ├── 1.2 Setup Database Migrations & Seed Data (PostgreSQL)
-│   ├── 1.3 Setup Frontend (Next.js 14 App Router + shadcn/ui)
-│   ├── 1.4 Implementasi Google OAuth + JWT Authentication
-│   ├── 1.5 RBAC Middleware (Owner & Cashier)
-│   └── 1.6 Docker Compose Setup (Multi-service stack)
+├── Fase 2: Analisis & Perancangan Sistem
+│   ├── 2.1 Analisis Kebutuhan Fungsional & Non-Fungsional (SRS)
+│   ├── 2.2 Pemodelan proses bisnis (Use Case & Activity Diagram)
+│   ├── 2.3 Perancangan arsitektur sistem (komponen, lapisan, & integrasi)
+│   ├── 2.4 Perancangan basis data (ERD & skema relasional)
+│   ├── 2.5 Perancangan antarmuka pengguna (Wireframe & Prototype)
+│   └── 2.6 Penetapan infrastruktur & lingkungan pengembangan
 │
-├── Fase 2: Modul Backoffice (Manajemen — Khusus Owner)
-│   ├── 2.1 Dashboard & Metrik Penjualan (KPI, grafik harian/per jam)
-│   ├── 2.2 Manajemen Kategori (CRUD)
-│   ├── 2.3 Manajemen Modifier Groups & Options (CRUD)
-│   ├── 2.4 Manajemen Produk (CRUD + Cloudinary Upload)
-│   ├── 2.5 Manajemen Karyawan (CRUD + Toggle Status)
-│   ├── 2.6 Manajemen Outlet/Cabang (CRUD)
-│   ├── 2.7 Activity Log Viewer (Audit Trail)
-│   ├── 2.8 Laporan Transaksi (dengan filter tanggal, outlet, metode bayar)
-│   ├── 2.9 Laporan Shift (dengan filter kasir, outlet, tanggal)
-│   └── 2.10 Pengaturan Sistem (Pajak, Metode Pembayaran, Struk)
+├── Fase 3: Implementasi Sistem
+│   ├── 3.1 Implementasi Infrastruktur Dasar
+│   │   ├── 3.1.1 Konfigurasi lingkungan pengembangan & repositori versi
+│   │   ├── 3.1.2 Pembangunan fondasi sistem (basis data, kerangka API, otentikasi)
+│   │   └── 3.1.3 Implementasi kontrol akses berbasis peran (RBAC)
+│   ├── 3.2 Implementasi Modul Manajemen (Pengguna: Pemilik)
+│   │   ├── 3.2.1 Dasbor & pelaporan penjualan (KPI & grafik)
+│   │   ├── 3.2.2 Manajemen data master (produk, kategori, varian produk)
+│   │   ├── 3.2.3 Manajemen operasional (karyawan, outlet, pengaturan sistem)
+│   │   └── 3.2.4 Pencatatan aktivitas sistem (jejak audit)
+│   └── 3.3 Implementasi Modul Kasir / POS (Pengguna: Kasir)
+│       ├── 3.3.1 Manajemen sesi kerja (buka & tutup shift)
+│       ├── 3.3.2 Alur penjualan & pemilihan produk
+│       ├── 3.3.3 Proses pembayaran (tunai & QRIS)
+│       ├── 3.3.4 Penerbitan bukti transaksi digital (struk & QR)
+│       └── 3.3.5 Riwayat transaksi & pembatalan (void)
 │
-├── Fase 3: Modul Kasir / POS (Operasional Harian)
-│   ├── 3.1 Manajemen Shift (Buka & Tutup Shift)
-│   ├── 3.2 Navigasi Menu (Tab Kategori + Grid Produk)
-│   ├── 3.3 Keranjang Belanja (Cart State Management — Zustand)
-│   ├── 3.4 Modifier Selection Modal (Kustomisasi Pesanan)
-│   ├── 3.5 Alur Checkout Tunai (kalkulasi kembalian otomatis)
-│   ├── 3.6 Alur Checkout QRIS (konfirmasi manual kasir)
-│   ├── 3.7 Otomasi Pengurangan Stok (Atomic DB Transaction)
-│   ├── 3.8 Struk Digital & QR Code (E-Receipt publik)
-│   └── 3.9 Riwayat Transaksi & Pembatalan (Void)
+├── Fase 4: Pengujian & Penjaminan Kualitas
+│   ├── 4.1 Pengujian Unit (validasi logika per komponen)
+│   ├── 4.2 Pengujian Integrasi (validasi antar-komponen & alur kritis)
+│   ├── 4.3 Pengujian Sistem & Kinerja (end-to-end & beban)
+│   ├── 4.4 Pengujian Kebergunaan — SUS (System Usability Scale)
+│   ├── 4.5 Pengujian Penerimaan Pengguna / UAT (bersama klien)
+│   └── 4.6 Perbaikan & penyempurnaan berdasarkan hasil pengujian
 │
-├── Fase 4: Testing & Quality Assurance
-│   ├── 4.1 Unit Testing (Backend Use Cases — Go test)
-│   ├── 4.2 Integration Testing (Critical Path: Auth, Shift, Checkout)
-│   ├── 4.3 UAT — User Acceptance Testing bersama klien
-│   └── 4.4 Bug Fixing & Polish
-│
-└── Fase 5: Deployment & Serah Terima
-    ├── 5.1 Deployment Frontend ke Vercel
-    ├── 5.2 Deployment Backend ke Railway/Render
-    ├── 5.3 Deployment Database ke Neon (Serverless PostgreSQL)
-    ├── 5.4 Konfigurasi environment production (CORS, OAuth, Cloudinary)
-    ├── 5.5 Penulisan README & dokumentasi final
-    └── 5.6 Demo & Serah Terima ke Klien
+└── Fase 5: Penerapan & Penutupan Proyek
+    ├── 5.1 Penerapan sistem ke lingkungan produksi (deployment)
+    ├── 5.2 Konfigurasi & verifikasi lingkungan produksi
+    ├── 5.3 Penyusunan dokumentasi teknis & panduan pengguna akhir
+    ├── 5.4 Penulisan laporan akhir proyek
+    ├── 5.5 Demo & serah terima sistem kepada klien
+    └── 5.6 Penutupan proyek & evaluasi pasca-implementasi
 ```
 
-**Tabel 2.2 Milestone per Fase**
+**Tabel 2.2 Milestone per Fase SDLC**
 
-| Milestone | Deskripsi | Target Selesai |
-|---|---|---|
-| **M0** | Proposal disetujui, arsitektur & database difinalisasi, repository siap | Akhir Fase 0 |
-| **M1** | Autentikasi Google OAuth berfungsi *end-to-end*, RBAC aktif, Docker stack berjalan | Akhir Fase 1 |
-| **M2** | Seluruh modul Backoffice dapat digunakan Owner (CRUD selesai, laporan tersedia) | Akhir Fase 2 |
-| **M3** | Alur kasir lengkap: buka shift → checkout → cetak struk → tutup shift | Akhir Fase 3 |
-| **M4** | *Integration test* lulus, UAT selesai, 0 *critical bug* | Akhir Fase 4 |
-| **M5** | Sistem *live* di URL publik, demo sukses, dokumentasi diserahkan | Akhir Fase 5 |
+| Milestone | Fase | Deskripsi Kriteria Keberhasilan | Target Selesai |
+|---|---|---|---|
+| **M1** | Inisiasi & Perencanaan | Proposal disahkan, tim terbentuk, MoU ditandatangani, WBS & jadwal disetujui | Akhir Fase 1 |
+| **M2** | Analisis & Perancangan | Dokumen SRS difinalisasi, ERD & arsitektur disetujui, prototipe UI disepakati klien | Akhir Fase 2 |
+| **M3** | Implementasi | Seluruh modul (manajemen & kasir) selesai dibangun dan berjalan di lingkungan pengembangan | Akhir Fase 3 |
+| **M4** | Pengujian | Seluruh skenario uji lulus, UAT disetujui klien, nol *bug* kritis tersisa | Akhir Fase 4 |
+| **M5** | Penerapan & Penutupan | Sistem *live* di lingkungan produksi, dokumentasi diserahkan, serah terima klien selesai | Akhir Fase 5 |
 
 > **Referensi:** [`proposal_proyek.md § BAB 5`](./proposal_proyek.md)
 
