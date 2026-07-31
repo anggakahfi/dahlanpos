@@ -174,16 +174,16 @@ func (r *shiftRepo) AutoCloseExpiredShifts(ctx context.Context) (int64, error) {
 			FROM shifts s
 			JOIN outlets o ON s.outlet_id = o.id
 			WHERE s.status = 'open'
-			  AND o.closing_time IS NOT NULL AND o.opening_time IS NOT NULL
+			  AND o.close_time IS NOT NULL AND o.open_time IS NOT NULL
 			  AND (
-				(o.closing_time >= o.opening_time AND 
-				 ((CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Jakarta')::time > (o.closing_time + interval '30 minutes') OR 
-				  (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Jakarta')::time < o.opening_time)
+				(o.close_time >= o.open_time AND 
+				 ((CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Jakarta')::time > (o.close_time + interval '30 minutes') OR 
+				  (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Jakarta')::time < o.open_time)
 				)
 				OR
-				(o.closing_time < o.opening_time AND 
-				 (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Jakarta')::time > (o.closing_time + interval '30 minutes') AND
-				 (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Jakarta')::time < o.opening_time
+				(o.close_time < o.open_time AND 
+				 (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Jakarta')::time > (o.close_time + interval '30 minutes') AND
+				 (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Jakarta')::time < o.open_time
 				)
 			  )
 		),
